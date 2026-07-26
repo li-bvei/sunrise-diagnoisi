@@ -1,0 +1,43 @@
+import {
+  ArrowRight,
+  Briefcase,
+  Coin,
+  Compass,
+  Connection,
+  DocumentChecked,
+  Fold,
+  House,
+  Key,
+  Medal,
+  OfficeBuilding,
+  Postcard,
+  Promotion,
+  Reading,
+  Ship,
+  Suitcase,
+  TrendCharts,
+  UserFilled,
+} from '@element-plus/icons-vue'
+
+export const iconMap = {
+  ArrowRight,
+  Briefcase,
+  Coin,
+  Compass,
+  Connection,
+  DocumentChecked,
+  Fold,
+  House,
+  Key,
+  Medal,
+  OfficeBuilding,
+  Passport: Postcard,
+  Promotion,
+  Reading,
+  Ship,
+  Suitcase,
+  TrendCharts,
+  UserFilled,
+}
+
+export type IconName = keyof typeof iconMap
