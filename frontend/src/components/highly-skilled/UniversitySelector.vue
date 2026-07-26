@@ -23,7 +23,6 @@ watch(() => [model.value.countryCode, model.value.searchText], () => {
 
 function choose(id: string) {
   model.value.universityId = id
-  model.value.manualReview = false
 }
 </script>
 
@@ -93,8 +92,7 @@ function choose(id: string) {
       <el-icon><WarningFilled /></el-icon>
       <div>
         <strong>{{ zh ? '当前官方 PDF 数据中未找到匹配记录' : '現在の公式PDFデータに一致する記録が見つかりません' }}</strong>
-        <p>{{ zh ? '未匹配不代表一定不符合资格，也不会自动加分。请核对正式英文名，或标记为人工确认。' : '未一致は対象外を意味しませんが、自動加点はしません。正式英語名を確認するか、個別確認に設定してください。' }}</p>
-        <el-checkbox v-model="model.manualReview">{{ zh ? '标记为需要人工确认' : '個別確認が必要として記録する' }}</el-checkbox>
+        <p>{{ zh ? '当前内置大学名单中未匹配到该学校，因此本次未计入大学名单加分。请尝试使用学校正式英文名称重新搜索。' : '現在の内蔵大学リストでは該当校を確認できなかったため、今回の試算では大学リスト加点を計上していません。大学の正式な英語名称で再検索してください。' }}</p>
       </div>
     </div>
     <p v-if="!props.educationAllowsBonus" class="field-help">

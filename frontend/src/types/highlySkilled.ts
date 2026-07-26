@@ -2,13 +2,10 @@ export type HighlySkilledActivity = 'academic' | 'professional' | 'management'
 export type EducationLevel = 'bachelor' | 'master' | 'doctorate' | 'professional_degree' | 'other'
 export type JapaneseLevel = 'none' | 'n2' | 'n1'
 export type ManagementPosition = 'none' | 'director' | 'representative'
-export type ReviewFlag = 'education' | 'university' | 'activity' | 'evidence'
-
 export interface UniversitySelection {
   countryCode: string
   universityId: string | null
   searchText: string
-  manualReview: boolean
 }
 
 export interface HighlySkilledInput {
@@ -50,7 +47,7 @@ export interface ScoreItem {
   key: string
   category: ScoreCategory
   points: number
-  status: 'confirmed' | 'pending' | 'excluded'
+  status: 'included' | 'not-included' | 'not-applicable' | 'excluded'
   sourceUrl?: string
   evidenceKey?: string
   reasonKey?: string
@@ -63,22 +60,16 @@ export interface ImprovementSuggestion {
 }
 
 export interface HighlySkilledResult {
-  /** Confirmed score retained for backwards-compatible consumers. */
-  total: number
-  confirmedTotal: number
-  pendingTotal: number
-  maximumTotal: number
+  totalPoints: number
   items: ScoreItem[]
-  meetsPointThreshold: boolean
-  maximumMeetsPointThreshold: boolean
-  confirmedMeets80: boolean
-  maximumMeets80: boolean
+  reaches70: boolean
+  reaches80: boolean
+  pointsTo70: number
+  pointsTo80: number
   meetsIncomeRequirement: boolean
   baseActivityConfirmed: boolean
   preliminaryEligible: boolean
-  missingPoints: number
   ageBand: 'under30' | '30to34' | '35to39' | '40plus'
-  reviewFlags: ReviewFlag[]
   suggestions: ImprovementSuggestion[]
   rulesVersion: string
 }
@@ -106,18 +97,16 @@ export interface DiagnosisReport {
     calculatedAge: number
     activity: HighlySkilledActivity
     education: EducationLevel
-    confirmedPoints: number
-    pendingPoints: number
-    maximumEstimatedPoints: number
-    reaches70Confirmed: boolean
-    reaches70Possible: boolean
-    reaches80Confirmed: boolean
-    reaches80Possible: boolean
+    totalPoints: number
+    reaches70: boolean
+    reaches80: boolean
+    pointsTo70: number
+    pointsTo80: number
     minimumIncomeSatisfied: boolean
-    status: 'confirmed-threshold' | 'possible-threshold' | 'below-threshold'
+    status: 'reaches80' | 'reaches70' | 'below70'
     university: UniversitySelection
     universityVerification: {
-      status: 'matched' | 'manual-review' | 'not-selected'
+      status: 'matched' | 'not-found' | 'not-selected'
       officialName?: string
       sourceDocument?: string
       sourcePage?: number
@@ -131,20 +120,18 @@ export interface DiagnosisReport {
     officialName?: string
     countryCode?: string
     japaneseHigherEducationDegreeSelected: boolean
-    rankingBonusStatus: 'confirmed' | 'not-found' | 'manual-review'
+    rankingBonusStatus: 'included' | 'not-found'
     sourceDocument?: string
     sourcePage?: number
   }
   scoreChart: {
-    confirmed: number
-    pending: number
+    totalPoints: number
     threshold70: 70
     threshold80: 80
   }
   categoryChart: Array<{
     category: string
-    confirmedPoints: number
-    pendingPoints: number
+    points: number
   }>
   breakdown: Array<{
     key: string

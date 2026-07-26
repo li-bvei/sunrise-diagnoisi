@@ -7,7 +7,6 @@ import type {
   HighlySkilledInput,
   HighlySkilledResult,
   ImprovementSuggestion,
-  ReviewFlag,
   ScoreItem,
 } from '@/types/highlySkilled'
 
@@ -95,7 +94,7 @@ function add(
   key: string,
   category: ScoreItem['category'],
   points: number,
-  status: ScoreItem['status'] = 'confirmed',
+  status: ScoreItem['status'] = 'included',
   sourceUrl?: string,
 ) {
   if (points > 0) items.push({ key, category, points, status, sourceUrl })
@@ -120,7 +119,7 @@ function suggestions(input: HighlySkilledInput, total: number): ImprovementSugge
     if (!input.multipleDegrees && ['master', 'doctorate', 'professional_degree'].includes(input.education)) {
       result.push({ key: 'multipleDegrees', potentialPoints: 5, priority: 'information' })
     }
-    if (!input.japaneseUniversity) {
+    if (!input.japaneseUniversity && input.japaneseLevel !== 'n2') {
       result.push({ key: 'japaneseDegreeSelection', potentialPoints: 10, priority: 'information' })
     }
   }
@@ -129,7 +128,7 @@ function suggestions(input: HighlySkilledInput, total: number): ImprovementSugge
     result.push({ key: 'qualificationReview', potentialPoints: 5, priority: 'information' })
   }
   if (input.researchAchievements > 0) result.push({ key: 'researchEvidence', potentialPoints: 0, priority: 'high' })
-  if (input.japaneseUniversity && input.japaneseLevel === 'n2') {
+  if (input.japaneseLevel === 'n2') {
     result.unshift({ key: 'japaneseDegreeN2Exclusion', potentialPoints: 0, priority: 'high' })
   }
   if (input.education === 'other') result.unshift({ key: 'educationReview', potentialPoints: 0, priority: 'high' })
@@ -143,55 +142,44 @@ export function calculateHighlySkilled(input: HighlySkilledInput): HighlySkilled
   add(items, 'experience', 'experience', experiencePoints(input.activity, input.experienceYears))
   add(items, 'income', 'income', incomePoints(input.activity, input.age, input.annualIncome))
   add(items, 'age', 'age', agePoints(input.activity, input.age))
-  add(items, 'research', 'research', researchPoints(input.activity, input.researchAchievements), 'pending', officialSources.research.url)
-  add(items, 'qualification', 'qualification', input.activity === 'professional' ? Math.min(input.qualificationCount, 2) * 5 : 0, 'pending', officialSources.japaneseQualification.url)
+  add(items, 'research', 'research', researchPoints(input.activity, input.researchAchievements), 'included', officialSources.research.url)
+  add(items, 'qualification', 'qualification', input.activity === 'professional' ? Math.min(input.qualificationCount, 2) * 5 : 0, 'included', officialSources.japaneseQualification.url)
   add(items, 'representative', 'position', input.activity === 'management' && input.managementPosition === 'representative' ? 10 : 0)
   add(items, 'director', 'position', input.activity === 'management' && input.managementPosition === 'director' ? 5 : 0)
   const graduateDegree = ['master', 'doctorate', 'professional_degree'].includes(input.education)
-  add(items, 'multipleDegrees', 'bonus', input.multipleDegrees && graduateDegree ? 5 : 0, 'pending', officialSources.pointEvidence.url)
+  add(items, 'multipleDegrees', 'bonus', input.multipleDegrees && graduateDegree ? 5 : 0, 'included', officialSources.pointEvidence.url)
   const selectedUniversity = universities.find((item) => item.id === input.university.universityId)
-  add(items, 'japaneseUniversity', 'bonus', input.japaneseUniversity ? 10 : 0, 'pending', officialSources.pointEvidence.url)
-  add(items, 'topUniversity', 'bonus', input.education !== 'other' && selectedUniversity?.sourceTypes.includes('world-ranking') ? 10 : 0, 'confirmed', officialSources.university.url)
-  add(items, 'japaneseN1', 'bonus', input.japaneseLevel === 'n1' ? 15 : 0)
-  if (input.japaneseLevel === 'n2' && input.japaneseUniversity) {
-    addExcluded(items, 'japaneseN2', 'bonus', 'excludedByJapaneseDegree')
+  if (input.japaneseUniversity && input.japaneseLevel === 'n2') {
+    addExcluded(items, 'japaneseUniversity', 'bonus', 'excludedByJapaneseN2')
   } else {
-    add(items, 'japaneseN2', 'bonus', input.japaneseLevel === 'n2' ? 10 : 0)
+    add(items, 'japaneseUniversity', 'bonus', input.japaneseUniversity ? 10 : 0, 'included', officialSources.pointEvidence.url)
   }
-  add(items, 'innovationOrganization', 'bonus', input.innovationOrganization ? 10 : 0, 'pending', officialSources.innovation.url)
-  add(items, 'innovationSme', 'bonus', input.innovationOrganization && input.innovationSme ? 10 : 0, 'pending', officialSources.innovation.url)
-  add(items, 'growthField', 'bonus', input.growthField ? 10 : 0, 'pending', officialSources.growthField.url)
-  add(items, 'localGovernmentSupport', 'bonus', input.localGovernmentSupport ? 10 : 0, 'pending', officialSources.localGovernment.url)
-  add(items, 'foreignQualification', 'bonus', input.foreignQualification ? 5 : 0, 'pending', officialSources.foreignQualification.url)
+  add(items, 'topUniversity', 'bonus', input.education !== 'other' && selectedUniversity?.sourceTypes.includes('world-ranking') ? 10 : 0, 'included', officialSources.university.url)
+  add(items, 'japaneseN1', 'bonus', input.japaneseLevel === 'n1' ? 15 : 0)
+  add(items, 'japaneseN2', 'bonus', input.japaneseLevel === 'n2' ? 10 : 0)
+  add(items, 'innovationOrganization', 'bonus', input.innovationOrganization ? 10 : 0, 'included', officialSources.innovation.url)
+  add(items, 'innovationSme', 'bonus', input.innovationOrganization && input.innovationSme ? 10 : 0, 'included', officialSources.innovation.url)
+  add(items, 'growthField', 'bonus', input.growthField ? 10 : 0, 'included', officialSources.growthField.url)
+  add(items, 'localGovernmentSupport', 'bonus', input.localGovernmentSupport ? 10 : 0, 'included', officialSources.localGovernment.url)
+  add(items, 'foreignQualification', 'bonus', input.foreignQualification ? 5 : 0, 'included', officialSources.foreignQualification.url)
 
-  const confirmedTotal = items.filter((item) => item.status === 'confirmed').reduce((sum, item) => sum + item.points, 0)
-  const pendingTotal = items.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.points, 0)
-  const maximumTotal = confirmedTotal + pendingTotal
-  const reviewFlags: ReviewFlag[] = []
-  if (input.education === 'other') reviewFlags.push('education' as const)
-  if (input.university.manualReview) reviewFlags.push('university' as const)
-  if (!input.baseActivityConfirmed) reviewFlags.push('activity' as const)
-  if (pendingTotal > 0 && !reviewFlags.includes('evidence')) reviewFlags.push('evidence')
-  const meetsPointThreshold = confirmedTotal >= 70
+  const totalPoints = items.filter((item) => item.status === 'included').reduce((sum, item) => sum + item.points, 0)
+  const reaches70 = totalPoints >= 70
+  const reaches80 = totalPoints >= 80
   const meetsIncomeRequirement = input.activity === 'management' || input.annualIncome >= 3_000_000
 
   return {
-    total: confirmedTotal,
-    confirmedTotal,
-    pendingTotal,
-    maximumTotal,
+    totalPoints,
     items,
-    meetsPointThreshold,
-    maximumMeetsPointThreshold: maximumTotal >= 70,
-    confirmedMeets80: confirmedTotal >= 80,
-    maximumMeets80: maximumTotal >= 80,
+    reaches70,
+    reaches80,
+    pointsTo70: Math.max(0, 70 - totalPoints),
+    pointsTo80: Math.max(0, 80 - totalPoints),
     meetsIncomeRequirement,
     baseActivityConfirmed: input.baseActivityConfirmed,
-    preliminaryEligible: meetsPointThreshold && meetsIncomeRequirement && input.baseActivityConfirmed,
-    missingPoints: Math.max(0, 70 - confirmedTotal),
+    preliminaryEligible: reaches70 && meetsIncomeRequirement && input.baseActivityConfirmed,
     ageBand: input.age < 30 ? 'under30' : input.age < 35 ? '30to34' : input.age < 40 ? '35to39' : '40plus',
-    reviewFlags,
-    suggestions: suggestions(input, confirmedTotal),
+    suggestions: suggestions(input, totalPoints),
     rulesVersion: HIGHLY_SKILLED_RULES_VERSION,
   }
 }
@@ -224,19 +212,13 @@ export function createDiagnosisReport(
       calculatedAge: input.age,
       activity: input.activity,
       education: input.education,
-      confirmedPoints: result.confirmedTotal,
-      pendingPoints: result.pendingTotal,
-      maximumEstimatedPoints: result.maximumTotal,
-      reaches70Confirmed: result.meetsPointThreshold,
-      reaches70Possible: result.maximumMeetsPointThreshold,
-      reaches80Confirmed: result.confirmedMeets80,
-      reaches80Possible: result.maximumMeets80,
+      totalPoints: result.totalPoints,
+      reaches70: result.reaches70,
+      reaches80: result.reaches80,
+      pointsTo70: result.pointsTo70,
+      pointsTo80: result.pointsTo80,
       minimumIncomeSatisfied: result.meetsIncomeRequirement,
-      status: result.meetsPointThreshold
-        ? 'confirmed-threshold'
-        : result.maximumMeetsPointThreshold
-          ? 'possible-threshold'
-          : 'below-threshold',
+      status: result.reaches80 ? 'reaches80' : result.reaches70 ? 'reaches70' : 'below70',
       university: { ...input.university },
       universityVerification: selectedUniversityForReport(input),
       inputSnapshot: JSON.parse(JSON.stringify(input)) as HighlySkilledInput,
@@ -244,8 +226,7 @@ export function createDiagnosisReport(
     result: JSON.parse(JSON.stringify(result)) as HighlySkilledResult,
     universityAssessment: createUniversityAssessment(input, locale),
     scoreChart: {
-      confirmed: result.confirmedTotal,
-      pending: result.pendingTotal,
+      totalPoints: result.totalPoints,
       threshold70: 70,
       threshold80: 80,
     },
@@ -253,8 +234,8 @@ export function createDiagnosisReport(
     breakdown: buildReportBreakdown(result.items),
     recommendations: JSON.parse(JSON.stringify(result.suggestions)) as ImprovementSuggestion[],
     disclaimer: locale === 'zh-CN'
-      ? '本报告仅为根据输入内容生成的自我检查，不构成许可保证或法律意见，最终由出入国在留管理厅审查。'
-      : '本レポートは入力内容に基づくセルフチェックであり、許可保証や法的助言ではありません。最終判断は出入国在留管理庁が行います。',
+      ? '本工具根据您填写和选择的内容计算预计积分。正式申请时，各项加分均需提交相应证明材料，并以出入国在留管理厅的最终审查结果为准。'
+      : '本ツールは、入力・選択された内容に基づき予想ポイントを計算するものです。実際の申請時には、各加点項目について所定の証明資料を提出する必要があり、最終的な判断は出入国在留管理庁の審査によります。',
   }
 }
 
@@ -268,7 +249,7 @@ function selectedUniversityForReport(input: HighlySkilledInput): DiagnosisReport
       sourcePage: selected.sourcePage,
     }
   }
-  return { status: input.university.manualReview ? 'manual-review' : 'not-selected' }
+  return { status: input.university.searchText ? 'not-found' : 'not-selected' }
 }
 
 function maskPhone(phone: string) {
@@ -290,11 +271,7 @@ function createUniversityAssessment(
     officialName: selected?.officialName,
     countryCode: selected?.countryCode ?? input.university.countryCode,
     japaneseHigherEducationDegreeSelected: input.japaneseUniversity,
-    rankingBonusStatus: selected
-      ? 'confirmed'
-      : input.university.manualReview || input.university.searchText
-        ? 'manual-review'
-        : 'not-found',
+    rankingBonusStatus: selected ? 'included' : 'not-found',
     sourceDocument: selected?.sourceDocument,
     sourcePage: selected?.sourcePage,
   }
@@ -308,15 +285,14 @@ export function buildCategoryChart(items: ScoreItem[]) {
     if (key === 'qualification') return 'qualification'
     return fallback
   }
-  const rows = new Map<string, { category: string; confirmedPoints: number; pendingPoints: number }>()
+  const rows = new Map<string, { category: string; points: number }>()
   for (const item of items) {
     const category = categoryFor(item.key, item.category)
-    const row = rows.get(category) ?? { category, confirmedPoints: 0, pendingPoints: 0 }
-    if (item.status === 'confirmed') row.confirmedPoints += item.points
-    if (item.status === 'pending') row.pendingPoints += item.points
+    const row = rows.get(category) ?? { category, points: 0 }
+    if (item.status === 'included') row.points += item.points
     rows.set(category, row)
   }
-  return Array.from(rows.values()).filter((row) => row.confirmedPoints || row.pendingPoints)
+  return Array.from(rows.values()).filter((row) => row.points)
 }
 
 function buildReportBreakdown(items: ScoreItem[]): DiagnosisReport['breakdown'] {

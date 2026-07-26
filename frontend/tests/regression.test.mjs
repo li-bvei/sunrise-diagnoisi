@@ -44,7 +44,7 @@ function baseInput(overrides = {}) {
     activity: 'professional', age: 30, annualIncome: 8_000_000, education: 'master',
     experienceYears: 7, researchAchievements: 0, japaneseLevel: 'none', qualificationCount: 0,
     managementPosition: 'none',
-    university: { countryCode: 'JP', universityId: null, searchText: '', manualReview: false },
+    university: { countryCode: 'JP', universityId: null, searchText: '' },
     multipleDegrees: false, japaneseUniversity: false, innovationOrganization: false,
     innovationSme: false, growthField: false, localGovernmentSupport: false,
     foreignQualification: false, baseActivityConfirmed: true, ...overrides,
@@ -101,27 +101,70 @@ test('Japanese higher-education degree is a manual input independent of school s
   const tokyo = runtime.searchUniversityRecords('JP', '东京大学').results[0].university
   const harvard = runtime.searchUniversityRecords('US', '哈佛大学').results[0].university
   const japaneseSchoolUnchecked = runtime.calculateHighlySkilled(baseInput({
-    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false },
+    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName },
     japaneseUniversity: false,
   }))
   assert.equal(japaneseSchoolUnchecked.items.some((item) => item.key === 'japaneseUniversity'), false)
 
   const foreignSchoolChecked = runtime.calculateHighlySkilled(baseInput({
-    university: { countryCode: 'US', universityId: harvard.id, searchText: harvard.officialName, manualReview: false },
+    university: { countryCode: 'US', universityId: harvard.id, searchText: harvard.officialName },
     japaneseUniversity: true,
   }))
   assert.equal(foreignSchoolChecked.items.find((item) => item.key === 'japaneseUniversity')?.points, 10)
 
   const n2Excluded = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: true, japaneseLevel: 'n2' }))
-  assert.equal(n2Excluded.items.find((item) => item.key === 'japaneseN2')?.status, 'excluded')
+  assert.equal(n2Excluded.items.find((item) => item.key === 'japaneseN2')?.status, 'included')
+  assert.equal(n2Excluded.items.find((item) => item.key === 'japaneseN2')?.points, 10)
+  assert.equal(n2Excluded.items.find((item) => item.key === 'japaneseUniversity')?.status, 'excluded')
   const n2Counted = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: false, japaneseLevel: 'n2' }))
   assert.equal(n2Counted.items.find((item) => item.key === 'japaneseN2')?.points, 10)
   const n1WithDegree = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: true, japaneseLevel: 'n1' }))
   assert.equal(n1WithDegree.items.find((item) => item.key === 'japaneseN1')?.points, 15)
   assert.equal(n1WithDegree.items.some((item) => item.key === 'japaneseUniversity'), true)
 
-  assert.match(viewSource, /v-model="form\.japaneseUniversity"/)
+  assert.equal((viewSource.match(/key: 'japaneseUniversity'/g) ?? []).length, 1)
+  assert.match(viewSource, /if \(value === 'n2'\) form\.japaneseUniversity = false/)
+  assert.match(viewSource, /bonus\.key === 'japaneseUniversity' && form\.japaneseLevel === 'n2'/)
+  assert.doesNotMatch(viewSource, /form\.japaneseUniversity = true/)
+  assert.ok(viewSource.indexOf("key: 'multipleDegrees'") < viewSource.indexOf("key: 'japaneseUniversity'"))
+  assert.ok(viewSource.indexOf("key: 'japaneseUniversity'") < viewSource.indexOf("key: 'innovationOrganization'"))
   assert.doesNotMatch(selectorSource, /japaneseUniversity/)
+})
+
+test('ordinary scoring uses one predicted total and includes selected complex bonuses immediately', () => {
+  const input = baseInput({
+    researchAchievements: 1,
+    qualificationCount: 2,
+    multipleDegrees: true,
+    innovationOrganization: true,
+    innovationSme: true,
+    growthField: true,
+    localGovernmentSupport: true,
+    foreignQualification: true,
+  })
+  const result = runtime.calculateHighlySkilled(input)
+  const included = result.items.filter((item) => item.status === 'included')
+  assert.equal(result.totalPoints, included.reduce((sum, item) => sum + item.points, 0))
+  assert.equal(result.reaches70, result.totalPoints >= 70)
+  assert.equal(result.reaches80, result.totalPoints >= 80)
+  assert.equal(result.pointsTo70, Math.max(0, 70 - result.totalPoints))
+  assert.equal(result.pointsTo80, Math.max(0, 80 - result.totalPoints))
+  assert.equal(result.items.some((item) => item.status === 'pending' || item.status === 'confirmed'), false)
+  for (const key of ['research', 'qualification', 'multipleDegrees', 'innovationOrganization', 'innovationSme', 'growthField', 'localGovernmentSupport', 'foreignQualification']) {
+    assert.equal(result.items.find((item) => item.key === key)?.status, 'included', key)
+  }
+  for (const obsolete of ['total', 'confirmedTotal', 'pendingTotal', 'maximumTotal', 'meetsPointThreshold', 'maximumMeetsPointThreshold', 'reviewFlags']) {
+    assert.equal(obsolete in result, false, obsolete)
+  }
+
+  const report = runtime.createDiagnosisReport(input, result, 'zh-CN')
+  assert.equal(report.diagnosis.totalPoints, result.totalPoints)
+  assert.equal(report.scoreChart.totalPoints, result.totalPoints)
+  assert.ok(report.categoryChart.every((row) => Object.keys(row).sort().join(',') === 'category,points'))
+  assert.equal(report.disclaimer, '本工具根据您填写和选择的内容计算预计积分。正式申请时，各项加分均需提交相应证明材料，并以出入国在留管理厅的最终审查结果为准。')
+  assert.doesNotMatch(reportTypesSource, /confirmedPoints|pendingPoints|maximumEstimatedPoints|manual-review/)
+  assert.doesNotMatch(calculatorSource, /status === 'pending'|status === 'confirmed'/)
+  assert.doesNotMatch(reportViewSource, /待确认|確認待ち|最高可能|最大見込|人工确认|個別確認/)
 })
 
 test('all degree-award confirmation code and copy has been removed', () => {

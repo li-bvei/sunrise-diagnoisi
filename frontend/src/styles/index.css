@@ -376,10 +376,6 @@ p, h1, h2, h3 { margin-top: 0; }
 .score-scale { position: relative; height: 22px; margin: 30px 0 14px; border: 1px solid #9aa9b1; background: white; }
 .score-segment { position: absolute; top: 0; bottom: 0; }
 .score-segment.confirmed, .legend.confirmed, .breakdown-track .confirmed { background: var(--color-primary); }
-.score-segment.pending, .legend.pending, .breakdown-track .pending {
-  background-color: #d6e0e5;
-  background-image: repeating-linear-gradient(135deg, transparent 0 5px, #70838d 5px 7px);
-}
 .threshold { position: absolute; z-index: 2; top: -9px; bottom: -9px; width: 2px; border-left: 2px dashed #9b5f35; }
 .threshold-80 { border-color: #4b5660; }
 .threshold span { position: absolute; top: -22px; left: -10px; padding: 0 3px; background: white; color: var(--color-text); font-size: 11px; font-style: normal; }
@@ -605,7 +601,6 @@ p, h1, h2, h3 { margin-top: 0; }
   .diagnosis-report { width: 100% !important; padding: 0 !important; box-shadow: none !important; }
   .report-card, .score-progress-chart, .breakdown-chart { break-inside: avoid; border-color: #777 !important; }
   .score-segment.confirmed, .breakdown-track .confirmed { background: #555 !important; print-color-adjust: exact; }
-  .score-segment.pending, .breakdown-track .pending { border-left: 2px dashed #222; background: #ddd !important; print-color-adjust: exact; }
   a { color: black !important; text-decoration: underline; }
 }
 

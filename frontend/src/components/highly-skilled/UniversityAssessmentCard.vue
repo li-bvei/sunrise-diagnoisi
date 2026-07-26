@@ -7,9 +7,7 @@ const props = defineProps<{
 }>()
 function status(value: string) {
   const labels: Record<string, [string, string]> = {
-    confirmed: ['已确认', '確認済み'],
-    'not-applicable': ['不适用', '対象外'],
-    'manual-review': ['需要人工确认', '個別確認が必要'],
+    included: ['已计入', '算入済み'],
     'not-found': ['未匹配', '未一致'],
   }
   return labels[value]?.[props.locale === 'zh-CN' ? 0 : 1] ?? value
