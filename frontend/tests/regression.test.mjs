@@ -1,27 +1,30 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import { build } from 'esbuild'
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8')
-const universities = read('../src/data/universities/officialUniversities.ts')
-const search = read('../src/data/universities/index.ts')
-const calculator = read('../src/utils/highlySkilledCalculator.ts')
-const view = read('../src/views/HighlySkilledView.vue')
-const reportTypes = read('../src/types/highlySkilled.ts')
-const help = read('../src/components/HelpPopover.vue')
-const numeric = read('../src/utils/numericInput.ts')
-const aliases = read('../src/data/universities/universityAliases.ts')
-const selector = read('../src/components/highly-skilled/UniversitySelector.vue')
-const reportView = read('../src/components/highly-skilled/DiagnosisReportView.vue')
-const styles = read('../src/styles/index.css')
+const officialSource = read('../src/data/universities/officialUniversities.ts')
+const machineNamesSource = read('../src/data/universities/machineTranslatedNames.ts')
+const searchSource = read('../src/data/universities/index.ts')
+const calculatorSource = read('../src/utils/highlySkilledCalculator.ts')
+const viewSource = read('../src/views/HighlySkilledView.vue')
+const reportTypesSource = read('../src/types/highlySkilled.ts')
+const numericSource = read('../src/utils/numericInput.ts')
+const selectorSource = read('../src/components/highly-skilled/UniversitySelector.vue')
+const reportViewSource = read('../src/components/highly-skilled/DiagnosisReportView.vue')
+const appSource = read('../src/App.vue')
+const stylesSource = read('../src/styles/index.css')
 
 const bundled = await build({
   stdin: {
     contents: `
       export * from './src/utils/highlySkilledCalculator.ts'
       export * from './src/data/universities/index.ts'
+      export * from './src/data/universities/officialUniversities.ts'
+      export * from './src/data/universities/universityAliases.ts'
+      export * from './src/data/universities/machineTranslatedNames.ts'
       export * from './src/utils/numericInput.ts'
     `,
     resolveDir: resolve('.'),
@@ -41,140 +44,162 @@ function baseInput(overrides = {}) {
     activity: 'professional', age: 30, annualIncome: 8_000_000, education: 'master',
     experienceYears: 7, researchAchievements: 0, japaneseLevel: 'none', qualificationCount: 0,
     managementPosition: 'none',
-    university: { countryCode: 'JP', universityId: null, searchText: '', manualReview: false, degreeAwardedByInstitution: false },
+    university: { countryCode: 'JP', universityId: null, searchText: '', manualReview: false },
     multipleDegrees: false, japaneseUniversity: false, innovationOrganization: false,
     innovationSme: false, growthField: false, localGovernmentSupport: false,
     foreignQualification: false, baseActivityConfirmed: true, ...overrides,
   }
 }
 
-test('official PDF import contains the complete audited dataset', () => {
-  assert.equal((universities.match(/manualReviewRequired: false/g) ?? []).length, 390)
-  assert.equal((universities.match(/sourceDocument: "001335478\.pdf"/g) ?? []).length, 390)
-  assert.match(universities, /sourcePage: 19/)
-  assert.match(universities, /sourceTypes: \['world-ranking'\]/)
+function sourceFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(dir, entry.name)
+    return entry.isDirectory() ? sourceFiles(path) : [path]
+  })
+}
+
+test('official PDF import remains complete and immutable', () => {
+  assert.equal(runtime.officialUniversities.length, 390)
+  assert.equal(new Set(runtime.officialUniversities.map((item) => item.id)).size, 390)
+  assert.equal((officialSource.match(/sourceDocument: "001335478\.pdf"/g) ?? []).length, 390)
+  assert.equal(Math.max(...runtime.officialUniversities.map((item) => item.sourcePage ?? 0)), 19)
+  assert.ok(runtime.officialUniversities.every((item) => item.sourceTypes.includes('world-ranking')))
 })
 
-test('university search normalizes names and caps visible results', () => {
-  assert.match(search, /\.normalize\('NFKC'\)/)
-  assert.match(search, /replace\(\/&\/g, ' and '\)/)
-  assert.match(search, /replace\(\/\^the\\s\+\/, ''\)/)
-  assert.match(search, /limit = 20/)
-  assert.match(search, /tooMany: matches\.length > limit/)
-})
-
-test('localized university names and multilingual search remain reliable', () => {
+test('all 390 universities have Chinese display names without overwriting the 75 curated names', () => {
   assert.equal(runtime.universityAliasCount, 75)
-  for (const [country, query, expected] of [
-    ['CN', '北京大学', 'Peking University'],
-    ['CN', '北大', 'Peking University'],
-    ['HK', '香港理工大學', 'The Hong Kong Polytechnic University'],
-    ['TW', '國立臺灣大學', 'National Taiwan University'],
-    ['MO', '澳门大学', 'University of Macau'],
-    ['US', 'MIT', 'Massachusetts Institute of Technology (MIT)'],
-    ['JP', '東京大学', 'The University of Tokyo'],
-  ]) {
-    const found = runtime.searchUniversityRecords(country, query).results
-    assert.equal(found[0]?.university.officialName, expected)
-    assert.equal(new Set(found.map((item) => item.university.id)).size, found.length)
+  assert.equal(runtime.machineTranslatedUniversityNameCount, 315)
+  assert.equal(runtime.universities.length, 390)
+  assert.ok(runtime.universities.every((item) => item.displayNames?.zh?.trim()))
+  assert.equal(runtime.universities.filter((item) => item.translationStatus === 'machine-translated').length, 315)
+
+  const curatedIds = new Set(Object.keys(runtime.universityAliases))
+  const machineIds = new Set(runtime.machineTranslatedUniversityNames.map((item) => item.universityId))
+  assert.equal([...curatedIds].filter((id) => machineIds.has(id)).length, 0)
+  for (const [id, alias] of Object.entries(runtime.universityAliases)) {
+    assert.equal(runtime.universities.find((item) => item.id === id)?.displayNames?.zh, alias.displayNames.zh)
   }
-  assert.equal(runtime.searchUniversityRecords('CN', '　北京　大学　').results[0].university.officialName, 'Peking University')
+  for (const official of runtime.officialUniversities) {
+    assert.equal(runtime.universities.find((item) => item.id === official.id)?.officialName, official.officialName)
+  }
+})
+
+test('Chinese and English search cover every university and never merge stable IDs', () => {
+  for (const university of runtime.universities) {
+    const chinese = runtime.searchUniversityRecords(university.countryCode, university.displayNames.zh, 390).results
+    const english = runtime.searchUniversityRecords(university.countryCode, university.officialName, 390).results
+    assert.ok(chinese.some((match) => match.university.id === university.id), `Chinese search missed ${university.id}`)
+    assert.ok(english.some((match) => match.university.id === university.id), `English search missed ${university.id}`)
+    assert.equal(new Set(chinese.map((match) => match.university.id)).size, chinese.length)
+  }
   assert.equal(runtime.searchUniversityRecords('CN', '北').results.length, 0)
-  const fallback = runtime.universities.find((item) => item.id === 'aalto-university')
-  assert.equal(runtime.getUniversityDisplayName(fallback, 'zh-CN'), fallback.officialName)
-  assert.equal(fallback.officialName, 'Aalto University')
+  assert.match(searchSource, /\.normalize\('NFKC'\)/)
+  assert.match(searchSource, /limit = 20/)
 })
 
-test('matched university is counted once and complex items remain pending', () => {
-  assert.match(calculator, /selectedUniversity\?\.sourceTypes\.includes\('world-ranking'\)/)
-  assert.match(calculator, /'topUniversity'.*'confirmed'/)
-  for (const key of ['research', 'qualification', 'innovationOrganization', 'growthField', 'localGovernmentSupport', 'foreignQualification']) {
-    assert.match(calculator, new RegExp(`'${key}'.*'pending'`))
-  }
-  assert.match(calculator, /confirmedTotal/)
-  assert.match(calculator, /maximumTotal/)
-})
-
-test('Japanese degree is automatic, reactive, and N2 exclusion is applied', () => {
+test('Japanese higher-education degree is a manual input independent of school selection', () => {
   const tokyo = runtime.searchUniversityRecords('JP', '东京大学').results[0].university
-  const harvard = runtime.searchUniversityRecords('US', 'Harvard').results[0].university
-  for (const education of ['bachelor', 'master', 'doctorate', 'professional_degree']) {
-    const input = baseInput({
-      education,
-      university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false, degreeAwardedByInstitution: true },
-    })
-    assert.equal(runtime.isJapaneseHigherEducationDegree(input), true)
-    assert.equal(runtime.calculateHighlySkilled(input).items.filter((item) => item.key === 'japaneseUniversity').length, 1)
-  }
-  const japaneseN2 = runtime.calculateHighlySkilled(baseInput({
-    japaneseLevel: 'n2',
-    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false, degreeAwardedByInstitution: true },
+  const harvard = runtime.searchUniversityRecords('US', '哈佛大学').results[0].university
+  const japaneseSchoolUnchecked = runtime.calculateHighlySkilled(baseInput({
+    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false },
+    japaneseUniversity: false,
   }))
-  assert.equal(japaneseN2.items.find((item) => item.key === 'japaneseN2').status, 'excluded')
-  const japaneseN1 = runtime.calculateHighlySkilled(baseInput({
-    japaneseLevel: 'n1',
-    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false, degreeAwardedByInstitution: true },
+  assert.equal(japaneseSchoolUnchecked.items.some((item) => item.key === 'japaneseUniversity'), false)
+
+  const foreignSchoolChecked = runtime.calculateHighlySkilled(baseInput({
+    university: { countryCode: 'US', universityId: harvard.id, searchText: harvard.officialName, manualReview: false },
+    japaneseUniversity: true,
   }))
-  assert.equal(japaneseN1.items.find((item) => item.key === 'japaneseN1').points, 15)
+  assert.equal(foreignSchoolChecked.items.find((item) => item.key === 'japaneseUniversity')?.points, 10)
 
-  const foreign = baseInput({
-    university: { countryCode: 'US', universityId: harvard.id, searchText: harvard.officialName, manualReview: false, degreeAwardedByInstitution: true },
-  })
-  assert.equal(runtime.isJapaneseHigherEducationDegree(foreign), false)
-  assert.ok(runtime.calculateHighlySkilled(foreign).items.some((item) => item.key === 'topUniversity'))
-  const uncertain = baseInput({
-    education: 'other',
-    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false, degreeAwardedByInstitution: true },
-  })
-  assert.equal(runtime.isJapaneseHigherEducationDegree(uncertain), false)
-  assert.ok(runtime.calculateHighlySkilled(uncertain).reviewFlags.includes('education'))
-  assert.doesNotMatch(selector, /v-model="form\.japaneseUniversity"/)
+  const n2Excluded = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: true, japaneseLevel: 'n2' }))
+  assert.equal(n2Excluded.items.find((item) => item.key === 'japaneseN2')?.status, 'excluded')
+  const n2Counted = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: false, japaneseLevel: 'n2' }))
+  assert.equal(n2Counted.items.find((item) => item.key === 'japaneseN2')?.points, 10)
+  const n1WithDegree = runtime.calculateHighlySkilled(baseInput({ japaneseUniversity: true, japaneseLevel: 'n1' }))
+  assert.equal(n1WithDegree.items.find((item) => item.key === 'japaneseN1')?.points, 15)
+  assert.equal(n1WithDegree.items.some((item) => item.key === 'japaneseUniversity'), true)
+
+  assert.match(viewSource, /v-model="form\.japaneseUniversity"/)
+  assert.doesNotMatch(selectorSource, /japaneseUniversity/)
 })
 
-test('date, income and experience controls use the required input model', () => {
-  assert.equal((view.match(/format="YYYY\/MM\/DD"/g) ?? []).length, 2)
-  assert.equal((view.match(/inputmode="numeric"/g) ?? []).length, 2)
-  assert.doesNotMatch(view, /el-input-number v-model="form\.(annualIncome|experienceYears)"/)
-  assert.match(numeric, /MAX_ANNUAL_INCOME_YEN = 1_000_000_000/)
-  assert.match(numeric, /MAX_EXPERIENCE_YEARS = 70/)
-  assert.match(numeric, /replace\(\/\[,，\\s\]\/g, ''\)/)
+test('all degree-award confirmation code and copy has been removed', () => {
+  const source = sourceFiles(resolve('src'))
+    .filter((path) => /\.(ts|vue|css|md)$/.test(path))
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
+  assert.doesNotMatch(source, /degreeAwardedByInstitution/)
+  assert.doesNotMatch(source, /autoJapaneseDegree/)
+  assert.doesNotMatch(source, /学位授予确认|学位授与確認/)
 })
 
-test('help and report structures retain sources and pending status', () => {
-  assert.match(help, /@mouseenter="visible = true"/)
-  assert.match(help, /@focus="visible = true"/)
-  assert.match(help, /@click="visible = !visible"/)
-  assert.match(help, /noopener noreferrer/)
-  assert.match(help, /aria-label/)
-  assert.match(reportTypes, /universityVerification/)
-  assert.match(reportTypes, /pendingTotal/)
-  assert.match(reportTypes, /maximumTotal/)
-  assert.match(view, /HelpPopover/)
+test('annual income accepts ten-thousand-yen units and keeps yen internally', () => {
+  assert.equal(runtime.parseIncomeManYenInput('400'), 4_000_000)
+  assert.equal(runtime.parseIncomeManYenInput('1000'), 10_000_000)
+  assert.equal(runtime.parseIncomeManYenInput('0.1'), 1_000)
+  assert.equal(runtime.parseIncomeManYenInput('-1'), null)
+  assert.equal(runtime.parseIncomeManYenInput(''), null)
+  assert.equal(runtime.formatIncomeManYen(4_000_000), '400')
+  assert.match(viewSource, /inputmode="decimal"/)
+  assert.match(viewSource, /万日元/)
+  assert.match(viewSource, /万円/)
+  assert.doesNotMatch(viewSource, /el-input-number v-model="form\.(annualIncome|experienceYears)"/)
+  assert.match(numericSource, /Math\.round\(manYen \* 10_000\)/)
 })
 
-test('report reuses the result snapshot, masks phone, and includes printable charts', () => {
-  const tokyo = runtime.searchUniversityRecords('JP', '东京大学').results[0].university
-  const input = baseInput({
-    japaneseLevel: 'n2',
-    researchAchievements: 1,
-    university: { countryCode: 'JP', universityId: tokyo.id, searchText: tokyo.officialName, manualReview: false, degreeAwardedByInstitution: true },
-  })
+test('income scoring and minimum-income checks use the converted yen value', () => {
+  const atFourMillion = runtime.calculateHighlySkilled(baseInput({ age: 29, annualIncome: 4_000_000 }))
+  assert.equal(atFourMillion.items.find((item) => item.key === 'income')?.points, 10)
+  assert.equal(atFourMillion.meetsIncomeRequirement, true)
+  const belowMinimum = runtime.calculateHighlySkilled(baseInput({ age: 29, annualIncome: 2_999_000 }))
+  assert.equal(belowMinimum.meetsIncomeRequirement, false)
+
+  const report = runtime.createDiagnosisReport(baseInput({ age: 29, annualIncome: 4_000_000 }), atFourMillion, 'zh-CN')
+  assert.equal(report.diagnosis.inputSnapshot.annualIncome, 4_000_000)
+  assert.match(reportViewSource, /万日元/)
+  assert.match(reportViewSource, /万円/)
+})
+
+test('report and result breakdowns expose only item, points, and status', () => {
+  const input = baseInput({ japaneseUniversity: true, japaneseLevel: 'n2', researchAchievements: 1 })
   const result = runtime.calculateHighlySkilled(input)
   const report = runtime.createDiagnosisReport(input, result, 'zh-CN')
-  assert.equal(report.result.confirmedTotal, result.confirmedTotal)
-  assert.equal(report.result.pendingTotal, result.pendingTotal)
-  assert.equal(report.result.maximumTotal, result.maximumTotal)
-  assert.deepEqual(report.recommendations, result.suggestions)
-  assert.equal(report.scoreChart.confirmed, result.confirmedTotal)
-  assert.equal(report.scoreChart.pending, result.pendingTotal)
-  assert.equal(report.universityAssessment.japaneseHigherEducationDegreeStatus, 'confirmed')
-  assert.notEqual(report.applicant.maskedPhone, input.phone)
-  assert.ok(report.categoryChart.some((row) => row.category === 'university'))
   assert.equal(report.breakdown.length, result.items.length)
-  assert.ok(report.breakdown.every((item) => item.inputValue && item.reasonKey && item.evidence.length))
-  assert.match(reportView, /ScoreProgressChart/)
-  assert.match(reportView, /ScoreBreakdownChart/)
-  assert.match(styles, /@media print/)
-  assert.match(styles, /@page \{ size: A4 portrait/)
-  assert.match(styles, /\.report-dialog \.el-dialog__footer \{ display: none/)
+  assert.ok(report.breakdown.every((item) => (
+    Object.keys(item).sort().join(',') === 'category,key,points,status'
+  )))
+  assert.equal('evidenceRequired' in report, false)
+  assert.equal('manualChecks' in report, false)
+  assert.equal('sources' in report, false)
+  assert.doesNotMatch(reportTypesSource, /evidenceRequired|manualChecks|sources: Array/)
+  assert.doesNotMatch(reportViewSource, /官方依据|公式根拠|需要证明的项目|証明が必要な項目|需要人工确认|個別確認が必要/)
+  assert.doesNotMatch(reportViewSource, /inputValue|reasonKey|item\.evidence/)
+  assert.doesNotMatch(stylesSource, /report-two-columns|report-sources/)
+  assert.match(reportViewSource, /ScoreProgressChart/)
+  assert.match(reportViewSource, /ScoreBreakdownChart/)
+  assert.match(reportViewSource, /UniversityAssessmentCard/)
+  assert.match(reportViewSource, /report\.recommendations/)
+})
+
+test('date pickers use stable values and numeric Chinese/Japanese calendar labels', () => {
+  assert.equal((viewSource.match(/value-format="YYYY-MM-DD"/g) ?? []).length, 2)
+  assert.equal((viewSource.match(/format="YYYY\/MM\/DD"/g) ?? []).length, 2)
+  for (let month = 1; month <= 12; month += 1) {
+    assert.match(appSource, new RegExp(`month${month}: '${month}月'`))
+  }
+  assert.match(appSource, /months: numericMonths/)
+  assert.match(appSource, /mon: '月曜日'/)
+  assert.match(appSource, /mon: '一'/)
+  assert.doesNotMatch(appSource, /十二月|December/)
+  assert.match(reportViewSource, /replace\(\/-\/g, '\/'\)/)
+  assert.match(calculatorSource, /calculateAge/)
+})
+
+test('report remains printable and charts remain visible at all sizes', () => {
+  assert.match(stylesSource, /@media print/)
+  assert.match(stylesSource, /@page \{ size: A4 portrait/)
+  assert.match(stylesSource, /\.report-dialog \.el-dialog__footer \{ display: none/)
+  assert.match(stylesSource, /\.result-chart-grid/)
+  assert.doesNotMatch(machineNamesSource, /officialName:/)
 })

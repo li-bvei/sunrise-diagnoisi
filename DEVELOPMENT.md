@@ -84,29 +84,31 @@ python scripts/extract_official_universities.py
 
 提取脚本自动识别根目录 `001335478*`，检查全部页面、记录总数、国家映射、规范化校名重复和稳定ID唯一性；任一不符合预期即停止生成，并把统计、异常行及重复行写入
 `scripts/output/university-import-review.json`。使用 `--check` 可在 CI 中验证提交数据与本地 PDF 一致。
-`universityAliases.ts` 只增加中文名和常用简称检索，不产生新的学校记录，也不能绕过官方ID选择。
-该文件必须按稳定学校 ID 维护，保存人工确认的显示名称、别名、可靠程度、核对日期和必要备注。PDF 导入脚本只能更新 `officialUniversities.ts`，不得覆盖人工名称。名称翻译只能采用学校官方中文页面、政府/教育机构公开资料或长期稳定通行名称；无法可靠确认时使用 `official-name-only` 并显示 PDF 官方名称。
+`universityAliases.ts` 保存 75 所已确认或具有稳定通行用法的中文名称和常用简称；`machineTranslatedNames.ts` 保存其余 315 所机器译名。两层都只改善显示和检索，不产生新学校记录，也不能绕过官方 ID 选择。PDF 导入脚本只能更新 `officialUniversities.ts`，不得覆盖任何中文名称层。
+
+机器译名状态固定为 `machine-translated`。后续人工核对学校官网、政府或教育机构资料后，应把该学校按稳定 ID 迁入 `universityAliases.ts`，将状态改为 `verified`（官方确认）或 `common-name`（稳定通行名称），并从 `machineTranslatedNames.ts` 删除同一 ID。不得修改 `officialName`，也不得按相同中文名合并不同 ID。
 
 搜索使用 NFKC、大小写、空格和标点规范化，并受控处理 `&/and`、前导 `The` 与维护过的简繁体别名；不得加入编辑距离等过度模糊匹配。界面最多显示 20 条，用户必须选择一条正式记录。未匹配只表示当前数据未找到，不等于不符合，也不得计分。
 
 ## 确定分与待确认分
 
-基础学历、职历、年收入、年龄、日语和已选中的官方大学记录可以进入确定分。研究成果、日本国家资格、多个领域学位、日本学位、创新机构、中小企业追加、成长领域、地方政府支援、指定外国资格等需要材料或个案判断的项目只进入待确认分。最高可能分等于确定分与待确认分之和；报告必须同时保存三者、70/80 分状态、学校核对状态、源文件/页码与相关官方链接。
+基础学历、职历、年收入、年龄、日语和已选中的官方大学记录可以进入确定分。研究成果、日本国家资格、多个领域学位、日本学位、创新机构、中小企业追加、成长领域、地方政府支援、指定外国资格等需要材料或个案判断的项目只进入待确认分。最高可能分等于确定分与待确认分之和；报告继续保存三者、70/80 分状态、学校核对状态和源文件/页码。
 
 官方链接统一维护在 `frontend/src/data/officialSources.ts`。更新规则时须逐个打开核对当前可访问性、标题与项目对应关系；页面组件不得另行硬编码同一制度链接。
 
-日期选择器由 `App.vue` 的 Element Plus Config Provider 跟随 Pinia 语言状态，显示 `YYYY/MM/DD`、内部保存 `YYYY-MM-DD`，切换语言不得清空值。年收入内部一律为日元整数，不使用“万日元”作为数据单位；相关职历为可证明的完整年数。两者使用普通数字输入框，不得恢复浏览器上下调节按钮。
+日期选择器由 `App.vue` 的 Element Plus Config Provider 跟随 Pinia 语言状态，显示 `YYYY/MM/DD`、内部保存 `YYYY-MM-DD`，切换语言不得清空值。中文和日文 locale 都显式覆盖月份为 `1月` 至 `12月`，不得恢复“一月/十二月”或英文月份。
+
+年收入页面边界使用“万日元/万円”，普通文本数字框允许一位小数；`parseIncomeManYenInput` 在进入计算层前乘以 10,000，`HighlySkilledInput.annualIncome`、积分档位与最低年收检查始终使用日元整数。结果和报告再除以 10,000 显示。清空值保持 `null`，不得使用带上下调节按钮的数字组件。相关职历仍按可证明的完整年数输入。
 
 ## 日本大学学位与报告快照
 
-日本高等教育机构学位由正式学校 ID、`countryCode === 'JP'`、当前学历和
-`degreeAwardedByInstitution` 共同推导。页面不得恢复独立手动勾选框；学校、学历或授予确认变化时必须重新推导并清除旧状态。学历为“其他/不确定”时不自动认定。
+日本高等教育机构学位是 `HighlySkilledInput.japaneseUniversity` 独立用户输入。页面必须保留清晰的手动勾选与补充说明，不得根据学校 ID、国家代码、学校切换或学历自动勾选或取消；院校查询只负责官方大学名单加分。原学位授予确认字段及相关 watch、类型、报告字段和文案不得恢复。
 
 根据入管厅高度人才积分制度 Q&A，N2/BJT 400 档与日本大学学位不重复计分；N1/BJT 480 档不属于该项排除。排除项目保留在明细中并标记为 `excluded`，便于结果页和报告解释。
 
 报告必须由 `createDiagnosisReport(input, result, locale)` 使用当前 `HighlySkilledResult`
 快照生成，不得再次计算积分。结果页和报告共同使用 `ScoreProgressChart`、
-`ScoreBreakdownChart` 以及同一份 `result.items`、`result.suggestions`。未来后端持久化时需保存学校 ID、PDF 官方名称、国家代码、规则版本、输入快照和结果快照；真正的服务端 PDF 下载也应继续消费当前报告对象。
+`ScoreBreakdownChart`、`result.items` 与 `result.suggestions`。报告不再包含或显示官方依据集合、证明项目集合、人工确认集合；积分明细对象和所有尺寸的界面只保留项目键、类别、分数和状态。
 
 姓名、电话、出生日期和报告预览只存在当前 Vue 页面状态，不得写入 localStorage、
 sessionStorage、URL、控制台或 API。语言偏好仍可按原设计使用 localStorage。

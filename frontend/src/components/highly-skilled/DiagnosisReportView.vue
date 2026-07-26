@@ -49,7 +49,15 @@ function activityLabel(activity: string) {
   }
   return labels[activity]?.[zh ? 0 : 1] ?? activity
 }
-function formatDate(value: string) { return value.slice(0, 10).replace(/-/g, '/') }
+function formatDate(value: string) {
+  if (!value.includes('T')) return value.slice(0, 10).replace(/-/g, '/')
+  const date = new Date(value)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('/')
+}
 function formatIncome(value: number) {
   const manYen = value / 10_000
   const formatted = Number.isInteger(manYen) ? String(manYen) : manYen.toFixed(1).replace(/\.0$/, '')

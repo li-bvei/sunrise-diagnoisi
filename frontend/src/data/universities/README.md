@@ -17,19 +17,26 @@ the local PDF. Do not edit it manually. Regenerate it from the repository root:
 python scripts/extract_official_universities.py
 ```
 
-`universityAliases.ts` contains searchable Chinese names and common
-abbreviations that are not present in the source PDF. Aliases improve search
-only; they never create a separate bonus record. The calculator awards the
-bonus only after the user selects one of the 390 official records by its stable
-ID.
+`universityAliases.ts` contains 75 curated Chinese names and common
+abbreviations. `machineTranslatedNames.ts` contains Chinese machine
+translations for the remaining 315 records. Both layers improve display and
+search only; they never create a separate bonus record. The calculator awards
+the bonus only after the user selects one of the 390 official records by its
+stable ID.
 
 Alias overrides are keyed by the stable generated university ID and include a
 preferred display name, controlled simplified/traditional/common aliases,
 translation status and verification date. The current curated layer covers 75
 records, prioritising mainland China, Hong Kong, Taiwan, Macao, Singapore,
 major Japanese universities and internationally well-known institutions.
-Records without a reliable Chinese name display the untouched PDF
-`officialName`; do not machine-translate them.
+Every record therefore has a Chinese display name. The untouched PDF
+`officialName` remains the formal matching and audit value.
+
+To promote a machine-translated name after manual review, add the stable ID and
+confirmed name to `universityAliases.ts` with `verified` or `common-name`
+status, then remove the same ID from `machineTranslatedNames.ts`. Never merge
+records by translated name and never let a PDF regeneration overwrite either
+name layer.
 
 When the Immigration Services Agency publishes a new list:
 
