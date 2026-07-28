@@ -2,8 +2,9 @@
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
-const phone = import.meta.env.VITE_CONTACT_PHONE || '06-XXXX-XXXX'
+const phone = import.meta.env.VITE_CONTACT_PHONE || '06-7650-6385'
 const officialUrl = import.meta.env.VITE_SUNRISE_OFFICIAL_URL || ''
+const address = import.meta.env.VITE_CONTACT_ADDRESS || '大阪市天王寺区勝山４丁目７－３佐々木ビル２階'
 </script>
 
 <template>
@@ -20,7 +21,8 @@ const officialUrl = import.meta.env.VITE_SUNRISE_OFFICIAL_URL || ''
       <section>
         <h2>{{ settings.dictionary.footer.contact }}</h2>
         <a class="phone" :href="phone.includes('X') ? undefined : `tel:${phone}`">{{ phone }}</a>
-        <p class="contact-note">{{ settings.locale === 'zh-CN' ? '服务时间及正式联系方式将在上线前公布。' : '受付時間および正式な連絡先は公開前にご案内します。' }}</p>
+        <p class="contact-address"><span>{{ settings.dictionary.footer.address }}</span>{{ address }}</p>
+        <p class="contact-note">{{ settings.dictionary.footer.hours }}</p>
       </section>
       <section>
         <h2>{{ settings.dictionary.footer.legal }}</h2>

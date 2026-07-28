@@ -93,4 +93,26 @@ export const officialSources = {
     sourceType: 'page',
     verifiedAt,
   },
+  permanentResidence: {
+    id: 'permanent-residence',
+    title: { zh: '永住许可申请官方页面', ja: '永住許可申請・公式ページ' },
+    url: 'https://www.moj.go.jp/isa/applications/procedures/16-4.html',
+    sourceType: 'page',
+    verifiedAt,
+  },
+  permanentResidenceGuideline: {
+    id: 'permanent-residence-guideline',
+    title: { zh: '永住许可相关指南（令和8年2月24日修订）', ja: '永住許可に関するガイドライン（令和８年２月２４日改訂）' },
+    url: 'https://www.moj.go.jp/isa/applications/resources/nyukan_nyukan50.html',
+    sourceType: 'page',
+    effectiveDate: '2026-02',
+    verifiedAt,
+  },
+  permanentResidenceHighlySkilled: {
+    id: 'permanent-residence-highly-skilled',
+    title: { zh: '高度人才永住在留年限缓和措施', ja: '高度人材の永住許可に関する在留期間の緩和' },
+    url: 'https://www.moj.go.jp/isa/applications/procedures/nyuukokukanri07_00131.html',
+    sourceType: 'page',
+    verifiedAt,
+  },
 } satisfies Record<string, OfficialRequirementLink>

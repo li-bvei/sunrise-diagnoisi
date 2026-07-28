@@ -63,12 +63,12 @@ backend/
 3. 校验 1号イ、ロ、ハ的学历、职历、年收、年龄与特殊项目；
 4. 使用边界值验证确定分与最高可能分的 69/70/79/80 分，以及年收 300 万日元；
 5. 同步更新中日文说明与 README；
-6. 保留高度人才积分、J-Skip 和永住条件的独立路由、独立数据模型及独立结果说明。
+6. 永住条件维护独立路由、独立数据模型及独立结果说明；J-Skip 见下条，不再要求独立路由。
 
 ## J-Skip 与院校名单维护
 
-J-Skip 不得并入普通高度人才积分结果，也不得显示积分合计。规则集中在
-`frontend/src/utils/jSkipCalculator.ts`，更新时以出入国在留管理厅 J-Skip 页面为准。
+J-Skip 判断已合并进高度人才积分计算页面（`frontend/src/views/HighlySkilledView.vue`），复用同一表单已收集的活动类型、学历、职历、年收入和基础活动确认，不再单独收集一次。`/tools/j-skip` 路由仅保留为跳转到 `/tools/highly-skilled` 的兼容重定向。J-Skip 的判断结果必须作为结果页里独立展示的区块（不可与上方积分明细混排），不得并入积分合计，也不得使用 70/80 分门槛描述。规则集中在
+`frontend/src/utils/jSkipCalculator.ts`，更新时以出入国在留管理厅 J-Skip 页面为准；`calculateJSkip` 的 `annualIncome` 参数单位是万日元，调用前需将高度人才表单里以日元整数保存的 `annualIncome` 除以 10000 再传入。
 
 大学加分数据集中在 `frontend/src/data/universities/`。其中 `officialUniversities.ts`
 由项目根目录 `001335478.pdf` 的全部19页表格机械生成，共390所学校、37个国家或地区，
@@ -112,3 +112,15 @@ python scripts/extract_official_universities.py
 
 姓名、电话、出生日期和报告预览只存在当前 Vue 页面状态，不得写入 localStorage、
 sessionStorage、URL、控制台或 API。语言偏好仍可按原设计使用 localStorage。
+
+## 永住申请条件诊断维护
+
+规则集中在 `frontend/src/utils/permanentResidenceCalculator.ts`，规则版本为 `PERMANENT_RESIDENCE_RULES_VERSION`，依据出入国在留管理厅《永住许可に関するガイドライン》（当前为令和8年2月24日改订版，见 `officialSources.permanentResidenceGuideline`）。制度或指南更新时：
+
+1. 核对指南原文与 `officialSources.permanentResidence*` 系列链接的可访问性；
+2. 更新 `PERMANENT_RESIDENCE_RULES_VERSION`；
+3. 校验6条路径（一般/配偶者/实子/定住者/高度人才/J-Skip）的年限门槛常量（`GENERAL_TOTAL_YEARS` 等）；
+4. 使用边界值验证各路径年限门槛的临界情况（如9/10年、69/70分、79/80分）；
+5. 同步更新中日文说明与 README「永住申请条件计算规则」章节。
+
+本工具与高度人才积分计算、J-Skip 判断保持独立数据模型：不读取、不复用高度人才积分计算的表单状态，用户需在本工具内自行申报所处积分区间与对应年限。素行善良与独立生计要件仅在 `route` 为 `spouse`/`child` 时按法条免除（`ResidenceRequirementItem.waived`），其余4条路径与所有路径共通的公共义务、无罚金/拘禁刑、现有最长在留期间等 `国益要件` 子项不得因路径不同而省略。

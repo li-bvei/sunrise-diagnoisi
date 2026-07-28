@@ -20,14 +20,14 @@ const copy = computed(() => settings.locale === 'zh-CN' ? {
   title: '专业诊断工具中心',
   description: '从在留资格、不动产、公司经营、工资到年金手续，选择适合您当前情况的诊断工具。',
   all: '全部',
-  notice: '“高度人才积分计算”和“特别高度人才J-Skip诊断”现已可使用。其余工具将陆续上线。',
+  notice: '“高度人才积分计算”（含特别高度人才J-Skip诊断）和“永住申请条件诊断”现已可使用。其余工具将陆续上线。',
   showing: `显示 ${filteredTools.value.length} 项工具`,
 } : {
   eyebrow: '全ツール',
   title: '専門診断ツールセンター',
   description: '在留資格、不動産、会社経営、給与、年金手続きから、現在の状況に合う診断ツールをお選びください。',
   all: 'すべて',
-  notice: '「高度人材ポイント計算」と「特別高度人材J-Skip診断」をご利用いただけます。その他のツールも順次公開します。',
+  notice: '「高度人材ポイント計算」（特別高度人材J-Skip診断を含む）と「永住許可要件診断」をご利用いただけます。その他のツールも順次公開します。',
   showing: `${filteredTools.value.length}件のツールを表示`,
 })
 

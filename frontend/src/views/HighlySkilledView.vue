@@ -13,6 +13,7 @@ import ScoreBreakdownChart from '@/components/highly-skilled/ScoreBreakdownChart
 import ScoreProgressChart from '@/components/highly-skilled/ScoreProgressChart.vue'
 import { officialSources } from '@/data/officialSources'
 import { buildCategoryChart, calculateAge, calculateHighlySkilled, createDiagnosisReport } from '@/utils/highlySkilledCalculator'
+import { calculateJSkip } from '@/utils/jSkipCalculator'
 import {
   formatIncomeManYen, formatInteger, MAX_EXPERIENCE_YEARS,
   parseIncomeManYenInput, parseIntegerInput,
@@ -21,6 +22,7 @@ import type {
   DiagnosisReport, EducationLevel, HighlySkilledInput,
   HighlySkilledResult, JapaneseLevel, ManagementPosition,
 } from '@/types/highlySkilled'
+import type { JSkipResult } from '@/types/jSkip'
 
 type FormModel = Omit<HighlySkilledInput, 'age' | 'annualIncome' | 'experienceYears'> & {
   age: number
@@ -31,6 +33,7 @@ type FormModel = Omit<HighlySkilledInput, 'age' | 'annualIncome' | 'experienceYe
 const settings = useSettingsStore()
 const activeStep = ref(0)
 const result = ref<HighlySkilledResult | null>(null)
+const jSkipResult = ref<JSkipResult | null>(null)
 const report = ref<DiagnosisReport | null>(null)
 const reportVisible = ref(false)
 const incomeText = ref('')
@@ -80,18 +83,21 @@ const copy = computed(() => zh.value ? {
   source: '规则版本：2026年7月', official: '查看入管厅积分制度',
   steps: ['活动类型', '个人与基本条件', '加分项目', '计算结果'],
   next: '下一步', previous: '上一步', calculate: '计算积分', points: '分',
-  name: '姓名', phone: '电话号码', birth: '出生日期', diagnosis: '诊断基准日',
+  name: '姓名', phone: '电话号码', phoneOptional: '（选填）', birth: '出生日期', diagnosis: '诊断基准日',
   income: '预计年收入', incomeHelp: '填写在日本从事拟申请活动可获得的税前预计年收入。', experience: '相关工作年限',
   education: '主要学历', research: '研究成果', qualification: '与职务相关的日本国家资格',
-  result: '积分计算结果', pass: '达到 70 分积分门槛', fail: '尚未达到 70 分积分门槛',
+  result: '积分计算结果', pass: '达到 70 分积分门槛', pass80: '达到 80 分积分门槛', fail: '尚未达到 70 分积分门槛',
   preliminaryPass: '初步判断：符合', preliminaryReview: '初步判断：基础条件未满足',
   breakdown: '积分明细', suggestions: '改善与准备建议', report: '生成诊断报告',
   reset: '重新计算', total: '总积分', missing: '距离门槛还差',
   baseConfirm: '我已确认拟从事活动符合对应就劳在留资格的活动范围和基础条件',
-  validation: '请完整填写姓名、电话、有效出生日期、诊断基准日、年收入和相关工作年限。',
+  validation: '请完整填写姓名、有效出生日期、诊断基准日、年收入和相关工作年限。',
   incomeFail: '1号イ、ロ原则上还需满足年收 300 万日元以上的最低年收基准。',
   baseFail: '尚未确认基础活动符合性，不能仅凭积分判断符合。',
-  jskipLink: '年收入或职历较高？可另外确认特别高度人才J-Skip制度。',
+  jskipTitle: '您可能同时符合特别高度人才 J-Skip',
+  jskipNote: '按您已填写的活动类型、学历或职历、年收入判断，您已同时满足J-Skip的基础条件。J-Skip不使用70分积分门槛，与上方积分完全独立、不计入总分，可作为另一条可能更快的申请路径了解。',
+  jskipOfficialLink: '查看入管厅J-Skip说明',
+  jskipDisclaimer: '该结果不包含积分，不代表许可决定。学历、职历、年收及活动内容均需以申请材料证明，并由入管厅最终审查。',
 } : {
   eyebrow: '高度人材ポイント制',
   title: '高度人材ポイント計算',
@@ -100,18 +106,21 @@ const copy = computed(() => zh.value ? {
   source: 'ルール版：2026年7月', official: '入管庁のポイント制度を見る',
   steps: ['活動類型', '本人・基本条件', '加点項目', '計算結果'],
   next: '次へ', previous: '戻る', calculate: 'ポイントを計算', points: '点',
-  name: '氏名', phone: '電話番号', birth: '生年月日', diagnosis: '診断基準日',
+  name: '氏名', phone: '電話番号', phoneOptional: '（任意）', birth: '生年月日', diagnosis: '診断基準日',
   income: '予定年収', incomeHelp: '申請する活動により日本で受ける税引前の予定年収を入力してください。', experience: '関連実務経験',
   education: '主な学歴', research: '研究実績', qualification: '職務に関連する日本の国家資格',
-  result: 'ポイント計算結果', pass: '70点の基準に到達', fail: '70点の基準に未到達',
+  result: 'ポイント計算結果', pass: '70点の基準に到達', pass80: '80点の基準に到達', fail: '70点の基準に未到達',
   preliminaryPass: '初期判断：該当可能性あり', preliminaryReview: '初期判断：基礎条件を満たしていません',
   breakdown: 'ポイント内訳', suggestions: '改善・準備の提案', report: '診断レポートを生成',
   reset: 'もう一度計算', total: '合計ポイント', missing: '基準まであと',
   baseConfirm: '予定する活動が対応する就労資格の活動範囲と基礎要件を満たすことを確認しました',
-  validation: '氏名、電話番号、有効な生年月日、診断基準日、年収、実務経験を入力してください。',
+  validation: '氏名、有効な生年月日、診断基準日、年収、実務経験を入力してください。',
   incomeFail: '1号イ・ロでは原則として年収300万円以上の最低年収基準も必要です。',
   baseFail: '活動該当性が未確認のため、ポイントだけでは判断できません。',
-  jskipLink: '高い年収または十分な職歴がある方は、特別高度人材J-Skip制度も別途確認できます。',
+  jskipTitle: '特別高度人材 J-Skip にも該当する可能性があります',
+  jskipNote: '入力済みの活動類型、学歴または職歴、年収から判断すると、J-Skipの基礎要件も同時に満たしています。J-Skipは70点の基準を使わず、上記のポイントとは完全に独立しており合計点には含まれません。より早く進められる可能性がある別ルートとしてご確認ください。',
+  jskipOfficialLink: '入管庁のJ-Skip説明を見る',
+  jskipDisclaimer: 'ポイント計算ではなく、許可判断でもありません。学歴、職歴、年収、活動内容は資料で立証し、入管庁の審査を受ける必要があります。',
 })
 
 const activities = computed(() => zh.value ? [
@@ -272,7 +281,7 @@ function disabledDate(date: Date, birth = false) {
 }
 function validBase() {
   return form.name.trim().length > 0 && form.name.trim().length <= 80
-    && form.phone.trim().length >= 7 && form.phone.trim().length <= 30
+    && (form.phone.trim().length === 0 || (form.phone.trim().length >= 7 && form.phone.trim().length <= 30))
     && age.value >= 0 && age.value <= 100
     && !!form.diagnosisDate && form.annualIncome !== null && form.annualIncome >= 0
     && form.experienceYears !== null && form.experienceYears >= 0
@@ -303,6 +312,13 @@ async function calculate() {
     experienceYears: form.experienceYears as number,
     university: { ...form.university },
   })
+  jSkipResult.value = calculateJSkip({
+    activity: form.activity,
+    education: form.education,
+    experienceYears: form.experienceYears as number,
+    annualIncome: (form.annualIncome as number) / 10_000,
+    baseActivityConfirmed: form.baseActivityConfirmed,
+  })
   report.value = null
   activeStep.value = 3
   await nextTick()
@@ -318,12 +334,33 @@ function createReport() {
   }, result.value, settings.locale)
   reportVisible.value = true
 }
-function printReport() { window.print() }
+function printReport() {
+  const el = document.querySelector('.diagnosis-report') as HTMLElement | null
+  if (el) {
+    const previousZoom = el.style.getPropertyValue('zoom')
+    const previousWidth = el.style.width
+    el.classList.add('report-print-compact')
+    el.style.setProperty('zoom', '1')
+    el.style.width = '703px'
+    const naturalHeight = el.scrollHeight
+    el.style.width = previousWidth
+    const targetHeight = 1040
+    const scale = naturalHeight > targetHeight ? Math.max(0.6, targetHeight / naturalHeight) : 1
+    el.style.setProperty('zoom', String(scale))
+    window.addEventListener('afterprint', function restore() {
+      el.classList.remove('report-print-compact')
+      if (previousZoom) el.style.setProperty('zoom', previousZoom)
+      else el.style.removeProperty('zoom')
+    }, { once: true })
+  }
+  window.print()
+}
 function reset() {
   Object.assign(form, initialForm())
   incomeText.value = ''
   experienceText.value = ''
   result.value = null
+  jSkipResult.value = null
   report.value = null
   activeStep.value = 0
 }
@@ -342,20 +379,20 @@ function itemLabel(key: string) {
 }
 function suggestionText(key: string) {
   const labels: Record<string, [string, string]> = {
-    prepareEvidence: ['积分已达标。下一步优先逐项准备学位、职历、年收和加分证明；未能证明的项目不能计分。', '基準点に到達しています。学歴、職歴、年収、加点項目の証明資料を項目ごとに準備してください。'],
-    japaneseN2: ['如实际取得 JLPT N2 或同等官方认定，可增加 10 分；请以合格证书为准。', 'JLPT N2等を取得できれば10点加算の可能性があります。合格証明が必要です。'],
-    japaneseN1Upgrade: ['当前为N2档位；如取得JLPT N1或BJT 480分以上，可核对更高档位。', '現在はN2区分です。JLPT N1またはBJT 480点以上を取得した場合、上位区分を確認できます。'],
-    gapTo80: [`当前预计总分距离80分还差 ${result.value?.pointsTo80 ?? 0} 分。`, `予想ポイントは80点まであと${result.value?.pointsTo80 ?? 0}点です。`],
-    qualificationReview: ['可根据预定职务核对是否持有直接相关的日本国家资格；民间或无关资格不计入。', '予定職務に直接関連する日本の国家資格があるか確認してください。民間資格や無関係な資格は対象外です。'],
-    researchEvidence: ['研究成果已计入预计总分；申请时请准备专利、研究资助决定或论文检索证明。', '研究実績は予想ポイントに算入済みです。申請時に特許、研究費採択、論文検索資料を準備してください。'],
-    japaneseDegreeN2Exclusion: ['JLPT N2与日本高等教育机构学位加分不能重复计算，当前按N2计分。', 'JLPT N2と日本の高等教育機関における学位取得の加点は重複できないため、現在はN2の加点を計上しています。'],
-    japaneseDegreeSelection: ['如确实在日本的高等教育机构取得学位，可勾选该独立加分项目。', '日本の高等教育機関で学位を取得した場合は、この独立加点項目を選択できます。'],
-    verifyUniversity: ['请用毕业证明上的正式英文校名重新搜索；未匹配的学校本次不计入院校加分。', '卒業証明書の正式英語名で再検索してください。一致しない大学は今回の大学加点に算入しません。'],
-    experience3: ['可证明的相关职历达到 3 年后，可能进入首个职历加分区间。', '証明可能な関連実務経験が3年に達すると、最初の職歴加点区分に入る可能性があります。'],
-    income400: ['30岁以下且预计年收达到 400 万日元时，年收项目可能增加 10 分。', '30歳未満で予定年収400万円以上の場合、年収項目で10点の可能性があります。'],
-    multipleDegrees: ['如持有不同专业领域的多个硕士、博士或专业职学位，可核对 5 分加分。', '異なる分野の修士・博士・専門職学位を複数保有する場合、5点加算を確認できます。'],
-    educationReview: ['学历选择为“其他或不确定”，当前未计学历分。请根据毕业证和学位证核对后重新选择。', '学歴が「その他・不明」のため学歴点は未加算です。卒業証明書と学位証明書を確認して選び直してください。'],
-    activityReview: ['先确认预定工作本身是否属于所选活动类型；积分达标不能替代在留资格活动审查。', '予定業務が選択した活動類型に該当するか確認してください。点数だけでは活動該当性を満たしません。'],
+    prepareEvidence: ['恭喜，积分已经达标！接下来请把学历、工作经历、年收入和其他加分项目的证明文件都准备齐全，因为最终能不能通过还是要看材料能否证明这些内容。', 'おめでとうございます、基準点に到達しました！次は学歴・職歴・年収やその他の加点項目の証明書類を揃えましょう。最終的には資料で証明できるかどうかがポイントになります。'],
+    japaneseN2: ['如果您有JLPT N2或同等日语能力证明（比如BJT商务日语考试400分以上），补充这一项可以多加10分，记得以合格证书为准。', 'JLPT N2やBJT400点以上など同等の日本語能力証明をお持ちなら、この項目を追加することで10点増える可能性があります。合格証明書が必要です。'],
+    japaneseN1Upgrade: ['现在是按N2档位计分的。如果您实际已经达到N1水平（或BJT 480分以上），可以再确认一下能不能升到更高档位加分。', '現在はN2区分で計算しています。もしN1、またはBJT480点以上をお持ちでしたら、より高い区分で加点できないか確認してみてください。'],
+    gapTo80: [`按目前情况，您距离80分还差 ${result.value?.pointsTo80 ?? 0} 分。达到80分能获得更多签证方面的优待，可以看看还有哪些项目能补充。`, `現在の状況では、80点まであと${result.value?.pointsTo80 ?? 0}点です。80点に到達するとさらに優遇が受けられるので、追加できる項目がないか見てみましょう。`],
+    qualificationReview: ['可以看看您从事的工作是否需要用到日本的国家资格证书，如果有相关的记得补充上，最多能加两项（每项5分）。', 'ご担当予定の業務に日本の国家資格が必要かどうか確認してみてください。関連する資格があれば追加でき、最大2件（1件5点）まで加点されます。'],
+    researchEvidence: ['您填写的研究成果已经算进总分了，正式申请时记得准备好专利证书、科研经费的批准文件或论文检索记录等证明材料。', '入力いただいた研究実績はすでに合計点に反映されています。申請時には特許証明、研究費採択通知、論文検索結果などの資料を準備しておきましょう。'],
+    japaneseDegreeN2Exclusion: ['日语N2和“在日本获得学位”这两项不能同时加分，系统已经按对您更有利的N2来计算了。', 'JLPT N2と「日本での学位取得」は同時に加点できないため、より有利なN2の方で計算しています。'],
+    japaneseDegreeSelection: ['如果您确实是在日本的大学或研究生院毕业并拿到学位的，记得勾选这一项，可以额外加10分。', '実際に日本の大学や大学院で学位を取得された場合は、この項目にチェックを入れると10点追加されます。'],
+    verifyUniversity: ['系统里没有搜索到您的学校，请用毕业证书上的官方英文校名再搜一次；如果最终还是没有匹配上，这次就没办法加院校分了。', '該当する学校が見つかりませんでした。卒業証明書に記載された正式な英語表記でもう一度検索してください。それでも一致しない場合、今回は大学の加点対象になりません。'],
+    experience3: ['相关工作经验只要能证明达到3年，就能开始拿到职历加分，可以留意一下年限是否已经足够。', '関連する実務経験が3年に達すると、職歴の加点が始まります。年数が足りているか確認してみてください。'],
+    income400: ['如果您不到30岁，并且年收入能达到400万日元以上，这一项就能多加10分。', '30歳未満で年収400万円以上であれば、この項目でさらに10点加算されます。'],
+    multipleDegrees: ['如果您有两个不同专业领域的硕士、博士或专业职学位，可以确认一下是否符合额外加5分的条件。', '分野の異なる修士・博士・専門職学位を2つ以上お持ちの場合、追加で5点加点できるか確認してみてください。'],
+    educationReview: ['您目前学历选的是“其他或不确定”，这样是不计学历分的。请拿出毕业证和学位证书核对一下，再重新选择对应的学历。', '現在、学歴は「その他・不明」になっており、学歴の点数は加算されていません。卒業証明書・学位記をご確認のうえ、該当する学歴を選び直してください。'],
+    activityReview: ['在看积分之前，请先确认您准备从事的工作内容确实符合所选的活动类型，光靠分数达标是不够的。', '点数を確認する前に、まずご予定の業務内容が選んだ活動類型に本当に当てはまるか確認してください。点数が足りていても、それだけでは不十分です。'],
   }
   return labels[key]?.[zh.value ? 0 : 1] ?? key
 }
@@ -412,7 +449,7 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
         <el-form label-position="top" class="calculator-form">
           <div class="form-grid">
             <el-form-item :label="copy.name" required><el-input v-model="form.name" maxlength="80" show-word-limit /></el-form-item>
-            <el-form-item :label="copy.phone" required><el-input v-model="form.phone" maxlength="30" inputmode="tel" placeholder="+81 90-1234-5678" /></el-form-item>
+            <el-form-item><template #label>{{ copy.phone }}<span class="field-optional-tag">{{ copy.phoneOptional }}</span></template><el-input v-model="form.phone" maxlength="30" inputmode="tel" placeholder="+81 90-1234-5678" /></el-form-item>
             <el-form-item :label="copy.birth" required><el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" :disabled-date="(d: Date) => disabledDate(d, true)" /></el-form-item>
             <el-form-item :label="copy.diagnosis" required><el-date-picker v-model="form.diagnosisDate" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" :disabled-date="(d: Date) => disabledDate(d)" /></el-form-item>
           </div>
@@ -502,7 +539,7 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
       </div>
 
       <div v-else-if="result" ref="resultSection" class="calculator-result">
-        <div class="result-summary" :class="{ passed: result.reaches70 }"><div class="score-ring"><strong>{{ result.totalPoints }}</strong><span>{{ zh ? '预计总分' : '予想ポイント' }}</span></div><div><span class="result-kicker">{{ copy.result }}</span><h2>{{ result.reaches70 ? copy.pass : copy.fail }}</h2><p>{{ zh ? '70分' : '70点' }}：{{ result.reaches70 ? '✓' : `— ${result.pointsTo70}${copy.points}` }} · {{ zh ? '80分' : '80点' }}：{{ result.reaches80 ? '✓' : `— ${result.pointsTo80}${copy.points}` }}</p><p v-if="!result.reaches70">{{ copy.missing }} {{ result.pointsTo70 }} {{ copy.points }}</p><el-tag :type="result.preliminaryEligible ? 'success' : 'warning'" round>{{ result.preliminaryEligible ? copy.preliminaryPass : copy.preliminaryReview }}</el-tag></div></div>
+        <div class="result-summary" :class="{ passed: result.reaches70, passed80: result.reaches80 }"><div class="score-ring"><strong>{{ result.totalPoints }}</strong><span>{{ zh ? '预计总分' : '予想ポイント' }}</span></div><div><span class="result-kicker">{{ copy.result }}</span><h2>{{ result.reaches80 ? copy.pass80 : result.reaches70 ? copy.pass : copy.fail }}</h2><p>{{ zh ? '70分' : '70点' }}：{{ result.reaches70 ? '✓' : `— ${result.pointsTo70}${copy.points}` }} · {{ zh ? '80分' : '80点' }}：{{ result.reaches80 ? '✓' : `— ${result.pointsTo80}${copy.points}` }}</p><p v-if="!result.reaches70">{{ copy.missing }} {{ result.pointsTo70 }} {{ copy.points }}</p><el-tag :type="result.preliminaryEligible ? 'success' : 'warning'" round>{{ result.preliminaryEligible ? copy.preliminaryPass : copy.preliminaryReview }}</el-tag></div></div>
         <section class="result-chart-grid">
           <ScoreProgressChart :total="result.totalPoints" :locale="settings.locale" />
           <ScoreBreakdownChart :rows="resultCategoryChart" :locale="settings.locale" />
@@ -516,7 +553,15 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
         </div>
         <section class="breakdown-card"><h3>{{ copy.breakdown }}</h3><div class="score-list"><div v-for="item in result.items" :key="item.key"><span><el-icon><Check /></el-icon>{{ itemLabel(item.key) }} <el-tag size="small" :type="item.status === 'included' ? 'success' : 'info'">{{ item.status === 'included' ? (zh ? '已计入' : '算入済み') : item.status === 'excluded' ? (zh ? '因排除关系未计入' : '重複不可のため未加点') : (zh ? '未计入' : '未算入') }}</el-tag></span><strong>{{ item.status === 'included' ? `+${item.points}` : '0' }} {{ copy.points }}</strong></div></div><div class="score-total"><span>{{ zh ? '预计总分' : '予想ポイント' }}</span><strong>{{ result.totalPoints }} {{ copy.points }}</strong></div></section>
         <section class="suggestion-card"><h3>{{ copy.suggestions }}</h3><div v-for="suggestion in result.suggestions" :key="suggestion.key" class="suggestion-item"><el-tag :type="suggestion.priority === 'high' ? 'warning' : 'info'" effect="light">{{ suggestion.potentialPoints ? `+${suggestion.potentialPoints}` : (zh ? '重要' : '重要') }}</el-tag><p>{{ suggestionText(suggestion.key) }}</p></div></section>
-        <router-link class="jskip-related-link" to="/tools/j-skip">{{ copy.jskipLink }}<el-icon><ArrowRight /></el-icon></router-link>
+        <section v-if="jSkipResult?.eligible" class="jskip-advisory">
+          <div class="result-status success">
+            <el-icon><Check /></el-icon>
+            <div><span>J-Skip</span><h2>{{ copy.jskipTitle }}</h2></div>
+          </div>
+          <p class="jskip-advisory-note">{{ copy.jskipNote }}</p>
+          <a class="official-inline-link" :href="officialSources.jSkip.url" target="_blank" rel="noopener noreferrer">{{ copy.jskipOfficialLink }} ↗</a>
+          <p class="jskip-advisory-disclaimer">{{ copy.jskipDisclaimer }}</p>
+        </section>
         <section class="result-disclaimer"><el-icon><InfoFilled /></el-icon><div><h3>{{ zh ? '结果使用说明' : '結果の取り扱い' }}</h3><p>{{ zh ? '本工具根据您填写和选择的内容计算预计积分。正式申请时，各项加分均需提交相应证明材料，并以出入国在留管理厅的最终审查结果为准。' : '本ツールは、入力・選択された内容に基づき予想ポイントを計算するものです。実際の申請時には、各加点項目について所定の証明資料を提出する必要があり、最終的な判断は出入国在留管理庁の審査によります。' }}</p></div></section>
         <div class="calculator-actions center"><el-button size="large" @click="reset"><el-icon><Refresh /></el-icon>{{ copy.reset }}</el-button><el-button type="primary" size="large" @click="createReport"><el-icon><DocumentChecked /></el-icon>{{ copy.report }}</el-button></div>
       </div>

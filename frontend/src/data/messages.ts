@@ -1,7 +1,7 @@
 export const messages = {
   'zh-CN': {
     brand: 'SUNRISE 专业诊断中心',
-    company: 'SUNRISE日晴鸿达株式会社',
+    company: 'SUNRISE日晟鸿达株式会社',
     nav: { home: '首页', tools: '专业诊断', guide: '使用说明', contact: '联系 SUNRISE', menu: '打开菜单' },
     common: {
       viewTools: '查看全部工具',
@@ -26,18 +26,20 @@ export const messages = {
     footer: {
       summary: '为在日生活与经营提供清晰、可靠的专业初步诊断。',
       contact: '咨询电话',
+      address: '地址',
+      hours: '服务时间：平日 9:00-18:00',
       legal: '使用与政策',
       privacy: '隐私政策',
       terms: '使用条款',
       disclaimer: '免责声明',
       official: '返回 SUNRISE 官网',
       unavailable: '官网地址待确认',
-      rights: '© SUNRISE日晴鸿达株式会社',
+      rights: '© SUNRISE日晟鸿达株式会社',
     },
   },
   'ja-JP': {
     brand: 'SUNRISE 専門診断・シミュレーション',
-    company: 'SUNRISE日晴鴻達株式会社',
+    company: 'SUNRISE日晟鴻達株式会社',
     nav: { home: 'ホーム', tools: '専門診断', guide: 'ご利用案内', contact: 'SUNRISEへ相談', menu: 'メニューを開く' },
     common: {
       viewTools: '診断ツールを見る',
@@ -62,13 +64,15 @@ export const messages = {
     footer: {
       summary: '日本での暮らしと事業に、分かりやすく信頼できる専門診断を。',
       contact: 'お問い合わせ',
+      address: '所在地',
+      hours: '受付時間：平日9:00-18:00',
       legal: 'ご利用について',
       privacy: 'プライバシーポリシー',
       terms: '利用規約',
       disclaimer: '免責事項',
       official: 'SUNRISE公式サイトへ',
       unavailable: '公式サイトURL確認中',
-      rights: '© SUNRISE日晴鴻達株式会社',
+      rights: '© SUNRISE日晟鴻達株式会社',
     },
   },
 } as const

@@ -55,8 +55,8 @@ export const tools: DiagnosisTool[] = [
     icon: 'Promotion',
     name: { 'zh-CN': '特别高度人才J-Skip诊断', 'ja-JP': '特別高度人材J-Skip診断' },
     description: {
-      'zh-CN': '不使用70分积分，按活动、学历或职历及年收入独立判断J-Skip基础条件。',
-      'ja-JP': '70点のポイント制を使わず、活動、学歴または職歴、年収からJ-Skipの基礎要件を判定します。',
+      'zh-CN': '不使用70分积分，按活动、学历或职历及年收入独立判断J-Skip基础条件；现已合并至高度人才积分计算结果中。',
+      'ja-JP': '70点のポイント制を使わず、活動、学歴または職歴、年収からJ-Skipの基礎要件を判定します。現在は高度人材ポイント計算の結果に統合されています。',
     },
     duration: { 'zh-CN': '约 3 分钟', 'ja-JP': '約3分' },
     results: {
@@ -64,7 +64,7 @@ export const tools: DiagnosisTool[] = [
       'ja-JP': '基礎要件判定、不足要件、立証の方向性',
     },
     status: 'available',
-    route: '/tools/j-skip',
+    route: '/tools/highly-skilled',
   },
   {
     id: 'permanent-residence',
@@ -75,12 +75,12 @@ export const tools: DiagnosisTool[] = [
       'zh-CN': '独立确认在留年限、纳税与社会保险、品行及高度人才相关永住条件。',
       'ja-JP': '在留年数、納税・社会保険、素行、高度人材に関する永住要件を個別に確認します。',
     },
-    duration: { 'zh-CN': '约 8～10 分钟', 'ja-JP': '約8～10分' },
+    duration: { 'zh-CN': '约 5～8 分钟', 'ja-JP': '約5～8分' },
     results: {
-      'zh-CN': '条件清单、时间要求、风险提示、材料方向',
-      'ja-JP': '要件一覧、期間要件、リスク、必要書類の方向性',
+      'zh-CN': '条件初判、逐项明细、改善与准备建议',
+      'ja-JP': '要件の初期判断、項目別内訳、改善・準備の提案',
     },
-    status: 'upcoming',
+    status: 'available',
     route: '/tools/permanent-residence',
   },
   {

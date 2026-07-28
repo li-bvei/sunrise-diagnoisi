@@ -254,6 +254,7 @@ function selectedUniversityForReport(input: HighlySkilledInput): DiagnosisReport
 
 function maskPhone(phone: string) {
   const compact = phone.replace(/\s/g, '')
+  if (compact.length === 0) return ''
   if (compact.length <= 4) return '****'
   return `${compact.slice(0, 3)}****${compact.slice(-3)}`
 }

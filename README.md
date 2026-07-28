@@ -1,6 +1,6 @@
 # SUNRISE 专业诊断中心
 
-面向 SUNRISE 客户公开使用的独立专业诊断前台。项目不接入原行政书士 ERP；目前已上线“高度人才积分计算”和独立的“特别高度人才J-Skip诊断”，其余工具陆续开放。
+面向 SUNRISE 客户公开使用的独立专业诊断前台。项目不接入原行政书士 ERP；目前已上线“高度人才积分计算”，结果页内含独立的“特别高度人才J-Skip”基础判断，其余工具陆续开放。
 
 ## 技术栈
 
@@ -98,7 +98,8 @@ SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 | `VITE_DEFAULT_LOCALE` | 默认语言，支持 `zh-CN` / `ja-JP` |
 | `VITE_API_BASE_URL` | 未来 Django API 基础路径 |
 | `VITE_SUNRISE_OFFICIAL_URL` | SUNRISE 官网地址，为空时链接不可用 |
-| `VITE_CONTACT_PHONE` | 联系电话，占位阶段建议保留 `06-XXXX-XXXX` |
+| `VITE_CONTACT_PHONE` | 联系电话 |
+| `VITE_CONTACT_ADDRESS` | 联系地址 |
 
 不要提交真实 `.env`，不要在组件中硬编码服务器 IP、API 域名或生产域名。
 
@@ -106,10 +107,10 @@ SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 
 - `/`：首页
 - `/tools`：全部工具
-- `/tools/highly-skilled`：高度人才积分计算（可使用）
-- `/tools/j-skip`：特别高度人才J-Skip独立基础判断（可使用、不计算积分）
+- `/tools/highly-skilled`：高度人才积分计算（可使用，结果页包含独立的J-Skip基础判断）
 - `/tools/permanent-residence`：永住申请条件诊断（即将上线）
 - `/tools/highly-skilled-pr`：兼容旧地址，重定向到高度人才计算器
+- `/tools/j-skip`：兼容旧地址，重定向到高度人才计算器
 - `/guide`：使用说明
 - `/privacy`：隐私政策占位
 - `/terms`：使用条款占位
@@ -126,7 +127,8 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 - 9 个工具和 4 个业务分类的完整内容展示
 - 高度人才与永住完全拆分为独立工具和路由
 - 真实高度人才积分计算：1号イ、ロ、ハ、70分门槛、最低年收检查
-- J-Skip 独立路由与独立基础条件判断，不显示积分合计
+- J-Skip 基础条件判断已合并至高度人才积分计算结果页，复用同一表单输入，作为独立展示区块、不显示积分合计
+- 永住申请条件诊断：覆盖一般永住、日本人/永住者/特别永住者配偶者与实子、定住者、高度人才、特别高度人才J-Skip 共6条路径的在留年限与素行、独立生计、公共义务、最长在留期间、无罚金/拘禁刑等基础条件机械判断
 - 出生日期与诊断基准日精确年龄计算、通俗活动类型、细化学历与人工确认标记
 - 基于根目录 `001335478.pdf` 全19页解析的2026年1月入管厅大学名单：390所学校、37个国家或地区
 - 院校中英日文、常用简称和部分匹配检索；明确选择官方记录后自动加分，无匹配时转人工确认
@@ -145,7 +147,7 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 
 ## 当前待开发
 
-- 永住及其他 6 项工具的真实诊断表单与计算逻辑
+- 其余 6 项工具（不动产、公司经营、工资年金相关）的真实诊断表单与计算逻辑
 - Django REST Framework API
 - MySQL 数据库
 - 客户资料与诊断记录保存
@@ -166,7 +168,7 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 - 学历、相关职历、预计年收、年龄、研究成果、国家资格、经营职位
 - 日语能力、日本高等教育机构学位、指定大学、创新机构等常见官方加分
 - 70 分积分门槛与1号イ/ロ最低年收基准提示
-- J-Skip 计算逻辑独立位于 `frontend/src/utils/jSkipCalculator.ts`
+- J-Skip 判断规则独立位于 `frontend/src/utils/jSkipCalculator.ts`，在本页复用同一表单输入并作为独立区块展示，不并入积分合计
 - 院校名单与名称匹配位于 `frontend/src/data/universities/`；仅选中PDF生成的390条官方记录才会自动加分
 - `scripts/extract_official_universities.py` 可从根目录PDF重新生成 `officialUniversities.ts`
 
@@ -179,6 +181,27 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 - [出入国在留管理厅：加分院校官方名单](https://www.moj.go.jp/isa/content/001335478.pdf)
 
 计算结果是基于用户输入的机械计算，不替代活动符合性、基础就劳资格、证明材料或个案审查，也不构成许可保证。
+
+## 永住申请条件计算规则
+
+计算逻辑位于 `frontend/src/utils/permanentResidenceCalculator.ts`，规则版本为 `2026-07`，依据 2026年2月24日改订的《永住许可に関するガイドライン》。覆盖6条路径：
+
+- 一般永住（技术・人文知识・国际业务、经营管理等就劳或居住资格）：连续在留10年，其中以就劳/居住资格（不含技能实习、特定技能1号）连续在留满5年
+- 日本人・永住者・特别永住者的配偶者：实质婚姻生活持续满3年，且连续在留满1年
+- 日本人・永住者・特别永住者的实子：连续在留满1年
+- 定住者：以定住者资格连续在留满5年
+- 高度人才：积分70分以上连续3年，或80分以上连续1年（与高度人才积分计算工具的70/80分门槛对应，但不共用同一次计算结果，由用户自行申报所处积分区间与年限）
+- 特别高度人才J-Skip：连续在留满1年
+
+所有路径均需满足：公共义务履行（纳税、养老金、医疗保险、入管法申报）、无罚金刑或拘禁刑记录、现有在留资格为该类别下最长在留期间；素行善良与独立生计仅在配偶者/实子路径下依法免除。
+
+制度依据：
+
+- [出入国在留管理厅：永住许可に関するガイドライン（令和8年2月24日改订）](https://www.moj.go.jp/isa/applications/resources/nyukan_nyukan50.html)
+- [出入国在留管理厅：永住许可申请](https://www.moj.go.jp/isa/applications/procedures/16-4.html)
+- [出入国在留管理厅：高度人才永住在留年限缓和措施](https://www.moj.go.jp/isa/applications/procedures/nyuukokukanri07_00131.html)
+
+计算结果是基于用户输入的机械判断，不代表入管厅最终审查结果；永住许可需综合审查证明材料与个案情况，不构成许可保证。
 
 ## 自动化检查
 
