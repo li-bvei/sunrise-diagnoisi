@@ -76,7 +76,11 @@ Docker 预览地址为 `http://127.0.0.1:8090`。Node 仅在多阶段构建的�
 
 ## 宝塔 / 宿主机 Nginx 反向代理
 
-容器端口仅绑定 `127.0.0.1:8090`，不会直接暴露到公网。建议在独立子域名的站点配置中，将 HTTPS 请求反向代理至：
+容器端口仅绑定 `127.0.0.1:8090`，不会直接暴露到公网。
+
+### 方式一：独立子域名（根路径）
+
+站点配置将 HTTPS 请求反向代理至：
 
 ```nginx
 location / {
@@ -87,6 +91,32 @@ location / {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
+
+此时前端按默认根路径 `/` 构建，无需额外配置。
+
+### 方式二：共用域名下的子路径（如 `/server/`）
+
+如果域名根路径已被其他站点占用，只能把本项目挂在子路径下（例如 `/server/`），反向代理规则形如：
+
+```nginx
+location ^~ /server/ {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+`proxy_pass`末尾的斜杠会让宿主机 Nginx 在转发前去掉 `/server/` 前缀，容器收到的请求路径与根路径部署时完全一致。但浏览器加载的静态资源地址（JS/CSS）如果仍按根路径 `/assets/...` 构建，会因为不带 `/server/` 前缀而被宿主机路由到域名根路径的其他站点，导致白屏或资源 404。
+
+此时必须让前端构建也带上 `/server/` 前缀：在**项目根目录**（与 `docker-compose.yml` 同级，不是 `frontend/.env`）新建 `.env` 文件：
+
+```bash
+VITE_BASE_PATH=/server/
+```
+
+再执行 `docker compose up -d --build` 重新构建。`docker-compose.yml` 会把 `VITE_BASE_PATH` 作为构建参数传入 `frontend/Dockerfile`，`vite.config.ts` 据此设置 Vite 的 `base`，前端资源路径和 Vue Router 的历史模式基准路径都会自动带上该前缀；容器自身的 Nginx 配置和健康检查不需要改动。如果之后子路径改变或恢复为根路径部署，把该值改掉或删除该 `.env` 文件后重新构建即可。
 
 SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 
