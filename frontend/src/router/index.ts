@@ -17,6 +17,7 @@ const router = createRouter({
         { path: 'tools', name: 'tools', component: () => import('@/views/ToolsView.vue'), meta: { title: { zh: '专业诊断', ja: '専門診断' } } },
         { path: 'tools/highly-skilled', name: 'highly-skilled', component: () => import('@/views/HighlySkilledView.vue'), meta: { title: { zh: '高度人才积分计算', ja: '高度人材ポイント計算' } } },
         { path: 'tools/permanent-residence', name: 'permanent-residence', component: () => import('@/views/PermanentResidenceView.vue'), meta: { title: { zh: '永住申请条件诊断', ja: '永住許可要件診断' } } },
+        { path: 'tools/rental-cost', name: 'rental-cost', component: () => import('@/views/RentalCostView.vue'), meta: { title: { zh: '租房初期费用诊断', ja: '賃貸初期費用診断' } } },
         { path: 'tools/highly-skilled-pr', redirect: '/tools/highly-skilled' },
         { path: 'tools/j-skip', redirect: '/tools/highly-skilled' },
         { path: 'guide', name: 'guide', component: () => import('@/views/GuideView.vue'), meta: { title: { zh: '使用说明', ja: 'ご利用案内' } } },

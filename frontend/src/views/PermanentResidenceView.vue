@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Check, Clock, DocumentChecked, InfoFilled, Refresh } from '@element-plus/icons-vue'
 import { useSettingsStore } from '@/stores/settings'
@@ -7,6 +7,7 @@ import HelpPopover from '@/components/HelpPopover.vue'
 import { officialSources } from '@/data/officialSources'
 import { calculatePermanentResidence, requiredContinuousYears } from '@/utils/permanentResidenceCalculator'
 import { formatInteger, MAX_EXPERIENCE_YEARS, parseIntegerInput } from '@/utils/numericInput'
+import { trackEvent } from '@/utils/analytics'
 import type { HighlySkilledPointsBand, PermanentResidenceInput, PermanentResidenceResult, ResidenceRoute } from '@/types/permanentResidence'
 
 type FormModel = PermanentResidenceInput & { name: string; phone: string }
@@ -39,6 +40,8 @@ const initialForm = (): FormModel => ({
   highlySkilledQualifyingYears: null,
 })
 const form = reactive<FormModel>(initialForm())
+
+onMounted(() => trackEvent({ type: 'tool_view', toolId: 'permanent-residence' }))
 
 const zh = computed(() => settings.locale === 'zh-CN')
 const waivesConductAndLivelihood = computed(() => form.route === 'spouse' || form.route === 'child')
@@ -171,6 +174,7 @@ async function calculate() {
     highlySkilledQualifyingYears: form.highlySkilledQualifyingYears,
   })
   activeStep.value = 2
+  trackEvent({ type: 'tool_complete', toolId: 'permanent-residence' })
   await nextTick()
   resultSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }

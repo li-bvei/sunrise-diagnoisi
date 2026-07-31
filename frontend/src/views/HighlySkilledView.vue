@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft, ArrowRight, Check, Clock, DocumentChecked, InfoFilled,
@@ -13,6 +13,7 @@ import ScoreBreakdownChart from '@/components/highly-skilled/ScoreBreakdownChart
 import ScoreProgressChart from '@/components/highly-skilled/ScoreProgressChart.vue'
 import { officialSources } from '@/data/officialSources'
 import { buildCategoryChart, calculateAge, calculateHighlySkilled, createDiagnosisReport } from '@/utils/highlySkilledCalculator'
+import { trackEvent } from '@/utils/analytics'
 import { calculateJSkip } from '@/utils/jSkipCalculator'
 import {
   formatIncomeManYen, formatInteger, MAX_EXPERIENCE_YEARS,
@@ -47,6 +48,8 @@ const today = [
 ].join('-')
 const earliestBirthDate = new Date()
 earliestBirthDate.setFullYear(earliestBirthDate.getFullYear() - 100)
+
+onMounted(() => trackEvent({ type: 'tool_view', toolId: 'highly-skilled' }))
 
 const initialForm = (): FormModel => ({
   name: '',
@@ -321,6 +324,7 @@ async function calculate() {
   })
   report.value = null
   activeStep.value = 3
+  trackEvent({ type: 'tool_complete', toolId: 'highly-skilled' })
   await nextTick()
   resultSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }

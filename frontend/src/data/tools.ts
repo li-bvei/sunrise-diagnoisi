@@ -119,8 +119,9 @@ export const tools: DiagnosisTool[] = [
       'ja-JP': '敷金、礼金、仲介手数料、保証会社費用、日割賃料などを計算します。',
     },
     duration: { 'zh-CN': '约 3 分钟', 'ja-JP': '約3分' },
-    results: { 'zh-CN': '初期费用明细、签约金额、材料清单、注意事项', 'ja-JP': '初期費用内訳、契約金額、書類一覧、注意事項' },
-    status: 'upcoming',
+    results: { 'zh-CN': '初期费用明细、签约金额、注意事项', 'ja-JP': '初期費用内訳、契約金額、注意事項' },
+    status: 'available',
+    route: '/tools/rental-cost',
   },
   {
     id: 'home-sale',
