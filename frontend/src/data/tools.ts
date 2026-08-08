@@ -29,6 +29,13 @@ export const categories: CategoryInfo[] = [
     description: { 'zh-CN': '确认离日前手续与年金相关事项。', 'ja-JP': '離日前の手続きと年金に関する事項を確認します。' },
     count: 1,
   },
+  {
+    id: 'exam',
+    icon: 'Reading',
+    name: { 'zh-CN': '资格考试', 'ja-JP': '資格試験' },
+    description: { 'zh-CN': '备考日本各类资格考试的刷题与学习工具。', 'ja-JP': '日本の各種資格試験対策のための演習・学習ツールです。' },
+    count: 1,
+  },
 ]
 
 export const tools: DiagnosisTool[] = [
@@ -161,6 +168,20 @@ export const tools: DiagnosisTool[] = [
     duration: { 'zh-CN': '约 5 分钟', 'ja-JP': '約5分' },
     results: { 'zh-CN': '年金概算、离日手续、税务提醒、材料清单', 'ja-JP': '年金概算、離日手続き、税務上の注意、書類一覧' },
     status: 'upcoming',
+  },
+  {
+    id: 'takken',
+    category: 'exam',
+    icon: 'Reading',
+    name: { 'zh-CN': '宅建考试刷题', 'ja-JP': '宅建過去問演習' },
+    description: {
+      'zh-CN': '按分类练习宅地建物取引士历年真题，自动记录作答历史并巩固薄弱题目。',
+      'ja-JP': 'カテゴリー別に宅地建物取引士の過去問を演習し、解答履歴を記録して弱点を強化します。',
+    },
+    duration: { 'zh-CN': '不限时长，随时练习', 'ja-JP': '時間制限なし、いつでも演習可能' },
+    results: { 'zh-CN': '逐题解析、记忆口诀、作答统计', 'ja-JP': '設問別の解説、記憶のコツ、解答統計' },
+    status: 'available',
+    route: '/tools/takken',
   },
 ]
 
