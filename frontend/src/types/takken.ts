@@ -18,31 +18,36 @@ export type TakkenAttemptMap = Record<string, TakkenAttemptRecord>
 
 export type TakkenPracticeMode = 'all' | 'wrong' | 'random'
 
+export interface TakkenBilingualText {
+  zh: string
+  ja?: string
+}
+
 export interface TakkenTopicTextBlock {
   type: 'text'
-  text: string
+  content: TakkenBilingualText
 }
 
 export interface TakkenTopicListBlock {
   type: 'list'
   style: 'ordered' | 'unordered'
-  items: string[]
+  items: TakkenBilingualText[]
 }
 
 export interface TakkenTopicTableBlock {
   type: 'table'
-  headers: string[]
-  rows: string[][]
+  headers: TakkenBilingualText[]
+  rows: TakkenBilingualText[][]
 }
 
 export interface TakkenTopicMnemonicBlock {
   type: 'mnemonic'
-  text: string
+  content: TakkenBilingualText
 }
 
 export interface TakkenTopicTrapBlock {
   type: 'trap'
-  text: string
+  content: TakkenBilingualText
 }
 
 export type TakkenTopicBlock =
@@ -60,7 +65,7 @@ export interface TakkenTopicSection {
 export interface TakkenTopic {
   id: string
   tag: string
-  title: string
+  title: TakkenBilingualText
   source: string
   sections: TakkenTopicSection[]
 }

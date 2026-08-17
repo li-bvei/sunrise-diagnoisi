@@ -20,6 +20,7 @@ const router = createRouter({
         { path: 'tools/rental-cost', name: 'rental-cost', component: () => import('@/views/RentalCostView.vue'), meta: { title: { zh: '租房初期费用诊断', ja: '賃貸初期費用診断' } } },
         { path: 'tools/takken', name: 'takken', component: () => import('@/views/TakkenQuizView.vue'), meta: { title: { zh: '宅建考试刷题', ja: '宅建過去問演習' } } },
         { path: 'tools/takken-notes', name: 'takken-notes', component: () => import('@/views/TakkenTopicsView.vue'), meta: { title: { zh: '宅建考点速查', ja: '宅建要点整理' } } },
+        { path: 'tools/takken-analysis', name: 'takken-analysis', component: () => import('@/views/TakkenAnalysisView.vue'), meta: { title: { zh: '宅建薄弱分析', ja: '宅建弱点分析' } } },
         { path: 'tools/highly-skilled-pr', redirect: '/tools/highly-skilled' },
         { path: 'tools/j-skip', redirect: '/tools/highly-skilled' },
         { path: 'guide', name: 'guide', component: () => import('@/views/GuideView.vue'), meta: { title: { zh: '使用说明', ja: 'ご利用案内' } } },

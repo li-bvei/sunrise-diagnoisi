@@ -517,6 +517,10 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-stat strong { display: block; font-size: 22px; color: var(--color-primary); }
 .takken-stat span { color: var(--color-text-secondary); font-size: 12px; }
 .takken-mode-bar { margin-bottom: 22px; }
+.takken-search { display: block; margin-bottom: 16px; }
+.takken-tag-filter { margin-bottom: 22px; }
+.takken-tag-filter-sub { margin-top: 10px; }
+.takken-tag-filter-sub button { border-style: dashed; font-weight: 600; }
 .takken-subnav { display: flex; gap: 8px; margin-bottom: 22px; }
 .takken-subnav-link { padding: 9px 18px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); color: var(--color-text-secondary); font-size: 13px; font-weight: 700; }
 .takken-subnav-link.router-link-exact-active { border-color: var(--color-primary); background: var(--color-primary); color: white; }
@@ -528,6 +532,21 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-toc ol { margin: 0; padding: 0 18px 16px 34px; color: var(--color-text-secondary); font-size: 13px; }
 .takken-toc li { margin-bottom: 6px; }
 .takken-toc a { color: var(--color-primary); font-weight: 600; }
+.takken-coverage { margin-bottom: 12px; }
+.takken-coverage summary { font-size: 15px; }
+.takken-coverage-ratio { color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
+.takken-heat-list { display: grid; padding: 2px 18px 16px; }
+.takken-heat-row { display: grid; grid-template-columns: 172px 1fr 52px; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid #f0f0ef; }
+.takken-heat-row:first-child { border-top: 0; }
+.takken-heat-row.zero { opacity: .55; }
+.takken-heat-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.takken-heat-label span:first-child { overflow-wrap: anywhere; color: var(--color-text); font-size: 13px; font-weight: 600; }
+.takken-heat-source { color: var(--color-text-secondary); font-size: 11px; }
+.takken-heat-bar-track { height: 7px; border-radius: 999px; background: var(--color-page); overflow: hidden; }
+.takken-heat-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #e2a98f, #a03d3d); transition: width .25s; }
+.takken-heat-row.zero .takken-heat-bar { background: var(--color-border); }
+.takken-heat-count { text-align: right; color: var(--color-text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.takken-heat-row.zero .takken-heat-count { color: var(--color-text-secondary); font-weight: 600; }
 .takken-topic { margin-bottom: 20px; padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-card); scroll-margin-top: 90px; }
 .takken-topic-source { margin: 0 0 12px; color: var(--color-text-secondary); font-size: 12px; }
 .takken-topic-section { margin-top: 20px; }
@@ -536,10 +555,17 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-topic-text { margin: 0 0 10px; color: var(--color-text); font-size: 14px; line-height: 1.85; }
 .takken-topic-list { margin: 4px 0 10px; padding-left: 20px; color: var(--color-text); font-size: 14px; line-height: 1.85; }
 .takken-topic-list li { margin-bottom: 6px; }
-.takken-topic-table-wrap { margin: 4px 0 10px; overflow-x: auto; }
-.takken-topic-table { width: 100%; min-width: 420px; border-collapse: collapse; font-size: 13px; }
-.takken-topic-table th, .takken-topic-table td { border: 1px solid var(--color-border); padding: 8px 10px; text-align: left; }
-.takken-topic-table th { background: var(--color-page); color: var(--color-primary); font-weight: 700; }
+.tk-bilingual { display: block; }
+.tk-ja { display: block; font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", "Georgia", serif; color: var(--color-text); }
+.tk-zh { display: block; margin-top: 3px; color: var(--color-text-secondary); font-size: 0.92em; }
+.tk-ja + .tk-zh { margin-top: 4px; }
+.takken-table { margin: 4px 0 10px; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; font-size: 13px; }
+.takken-table-row { display: grid; grid-template-columns: repeat(var(--takken-table-cols), 1fr); }
+.takken-table-row + .takken-table-row { border-top: 1px solid var(--color-border); }
+.takken-table-row--head { background: var(--color-page); font-weight: 700; color: var(--color-primary); }
+.takken-table-cell { padding: 10px 12px; border-left: 1px solid var(--color-border); word-break: break-word; }
+.takken-table-cell:first-child { border-left: 0; }
+.takken-table-cell-label { display: none; }
 .takken-mnemonic-block, .takken-trap-block { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.8; white-space: pre-line; }
 .takken-mnemonic-block { border: 1px solid #cae2d6; background: #f1f8f4; color: #2d715a; }
 .takken-trap-block { border: 1px solid #e6c6c6; background: #fbeeee; color: #a03d3d; }
@@ -567,9 +593,18 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-feedback { margin-top: 20px; padding: 18px; border-radius: 12px; }
 .takken-feedback.correct { border: 1px solid #cae2d6; background: #f1f8f4; }
 .takken-feedback.wrong { border: 1px solid #e6c6c6; background: #fbeeee; }
-.takken-feedback-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-weight: 800; }
-.takken-feedback-title.correct { color: #2d715a; }
+.takken-feedback-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-weight: 800; font-size: 16px; }
+.takken-feedback-title.correct { color: #2d715a; animation: takken-pop .32s cubic-bezier(.34,1.56,.64,1); }
 .takken-feedback-title.wrong { color: #a03d3d; }
+@keyframes takken-pop { 0% { transform: scale(.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.takken-toast { position: fixed; top: 18%; left: 50%; z-index: 200; display: flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 999px; background: rgba(32,54,64,.94); backdrop-filter: blur(6px); box-shadow: 0 16px 40px rgba(20,32,40,.35); color: white; font-size: 19px; font-weight: 800; letter-spacing: .01em; pointer-events: none; transform: translate(-50%, 0); animation: takken-toast-life 1.2s ease forwards; }
+.takken-toast-combo { padding: 3px 11px; border-radius: 999px; background: rgba(255,255,255,.16); color: #ffd48a; font-size: 13px; font-weight: 700; }
+@keyframes takken-toast-life {
+  0% { opacity: 0; transform: translate(-50%, -10px) scale(.85); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(.94); }
+}
 .takken-explain { margin: 0 0 12px; color: var(--color-text); font-size: 14px; line-height: 1.85; }
 .takken-takeaway { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 9px; background: #faf6ef; color: #7a5b2a; font-size: 13px; line-height: 1.7; }
 .takken-takeaway .el-icon { flex: 0 0 auto; margin-top: 2px; }
@@ -577,8 +612,46 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-bottom-nav-inner { display: flex; gap: 12px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
 .takken-bottom-nav .el-button { flex: 1; margin-left: 0; }
 
+.takken-countdown { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; padding: 20px 22px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary)); }
+.takken-countdown-number { display: flex; align-items: baseline; gap: 8px; color: white; }
+.takken-countdown-number strong { font-size: 40px; line-height: 1; }
+.takken-countdown-number span { font-size: 14px; opacity: .85; }
+.takken-countdown-empty { color: white; font-size: 14px; font-weight: 600; opacity: .9; }
+.takken-countdown .el-input__wrapper { background: white; }
+.takken-section-title { margin: 28px 0 14px; font-size: 16px; }
+.takken-hint { margin: -6px 0 16px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.takken-category-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 8px; }
+.takken-category-card { padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-card); }
+.takken-category-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--color-text); }
+.takken-category-card-count { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }
+.takken-category-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-secondary); }
+.takken-progress-track { height: 6px; border-radius: 999px; background: var(--color-page); overflow: hidden; }
+.takken-progress-track i { display: block; height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s; }
+.takken-weak-badge, .takken-ok-badge, .takken-muted-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.takken-weak-badge { background: #fbeeee; color: #a03d3d; }
+.takken-ok-badge { background: #eef7f2; color: #2d715a; }
+.takken-muted-badge { background: var(--color-page); color: var(--color-text-secondary); font-weight: 600; }
+.takken-mistake-count { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #fbeeee; color: #a03d3d; font-size: 12px; font-weight: 700; }
+.takken-table .text-link { font-size: 13px; }
+
+@media (max-width: 640px) {
+  .takken-table-row { display: block; }
+  .takken-table-row--head { display: none; }
+  .takken-table-cell { display: block; border-left: 0; border-top: 1px solid var(--color-border); }
+  .takken-table-cell:first-child { border-top: 0; }
+  .takken-table-cell-label { display: block; margin-bottom: 3px; color: var(--color-text-secondary); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+  .takken-category-grid { grid-template-columns: 1fr; }
+  .takken-countdown { flex-direction: column; align-items: flex-start; }
+  .takken-countdown .el-date-editor { width: 100%; }
+  .takken-heat-row { grid-template-columns: 1fr auto; grid-template-areas: "label count" "bar bar"; row-gap: 6px; padding: 12px 0; }
+  .takken-heat-label { grid-area: label; }
+  .takken-heat-count { grid-area: count; }
+  .takken-heat-bar-track { grid-area: bar; }
+}
+
 @media (max-width: 520px) {
   .takken-card { padding: 18px; }
+  .takken-topic { padding: 18px; }
   .takken-stat { padding: 13px 8px; }
   .takken-stat strong { font-size: 19px; }
 }

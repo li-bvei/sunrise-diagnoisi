@@ -1,0 +1,221 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ArrowRight } from '@element-plus/icons-vue'
+import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
+import rawQuestions from '@/data/takken-questions.json'
+import type { TakkenAttemptMap, TakkenQuestion } from '@/types/takken'
+import { loadTakkenAttempts, loadTakkenExamDate, saveTakkenExamDate } from '@/utils/takkenStorage'
+import { classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, TAKKEN_EXAM_TOTAL_QUESTIONS, type TakkenCategory } from '@/utils/takkenCategories'
+import { TAKKEN_SYLLABUS } from '@/data/takkenSyllabus'
+
+const questions = rawQuestions as TakkenQuestion[]
+const attempts: TakkenAttemptMap = loadTakkenAttempts()
+const router = useRouter()
+
+const examDate = ref<string | null>(loadTakkenExamDate())
+const examDateModel = computed({
+  get: () => examDate.value,
+  set: (value: string | null) => {
+    examDate.value = value
+    saveTakkenExamDate(value)
+  },
+})
+const daysLeft = computed(() => {
+  if (!examDate.value) return null
+  const target = new Date(`${examDate.value}T00:00:00+09:00`)
+  return Math.ceil((target.getTime() - Date.now()) / 86_400_000)
+})
+
+interface TagStat { tag: string; category: TakkenCategory; total: number; attempted: number; attemptsSum: number; correctSum: number; weak: number }
+
+const tagStats = computed<TagStat[]>(() => {
+  const map = new Map<string, TagStat>()
+  for (const question of questions) {
+    let stat = map.get(question.tag)
+    if (!stat) {
+      stat = { tag: question.tag, category: classifyTakkenTag(question.tag), total: 0, attempted: 0, attemptsSum: 0, correctSum: 0, weak: 0 }
+      map.set(question.tag, stat)
+    }
+    stat.total += 1
+    const record = attempts[question.id]
+    if (record && record.attempts > 0) {
+      stat.attempted += 1
+      stat.attemptsSum += record.attempts
+      stat.correctSum += record.correct
+      if (record.correct < record.attempts) stat.weak += 1
+    }
+  }
+  return [...map.values()]
+})
+
+function accuracyOf(stat: { attemptsSum: number; correctSum: number }): number | null {
+  return stat.attemptsSum === 0 ? null : Math.round((stat.correctSum / stat.attemptsSum) * 100)
+}
+
+interface CategoryStat { category: TakkenCategory; total: number; attempted: number; attemptsSum: number; correctSum: number; weak: number; weight: number | null }
+
+const categoryStats = computed<CategoryStat[]>(() => {
+  const map = new Map<string, CategoryStat>()
+  for (const stat of tagStats.value) {
+    let entry = map.get(stat.category)
+    if (!entry) {
+      const weight = stat.category === '其他' ? null : TAKKEN_CATEGORY_WEIGHTS[stat.category]
+      entry = { category: stat.category, total: 0, attempted: 0, attemptsSum: 0, correctSum: 0, weak: 0, weight }
+      map.set(stat.category, entry)
+    }
+    entry.total += stat.total
+    entry.attempted += stat.attempted
+    entry.attemptsSum += stat.attemptsSum
+    entry.correctSum += stat.correctSum
+    entry.weak += stat.weak
+  }
+  const order = [...TAKKEN_CATEGORY_ORDER, '其他']
+  return order.map((category) => map.get(category)).filter((entry): entry is CategoryStat => !!entry)
+})
+
+function densityOf(stat: { total: number; weight: number | null }): number | null {
+  return stat.weight ? Math.round((stat.total / stat.weight) * 100) : null
+}
+
+// 主排序按错题数量（哪个大科目错得最多），错题密度（错题数 ÷ 官方满分）作为同等数量下的
+// 参考信息展示在卡片上，不参与主排序。
+const sortedCategoryStats = computed(() => [...categoryStats.value].sort((a, b) => b.total - a.total))
+
+const rankedTagStats = computed(() => [...tagStats.value].sort((a, b) => {
+  if (b.total !== a.total) return b.total - a.total
+  return (accuracyOf(a) ?? -1) - (accuracyOf(b) ?? -1)
+}))
+
+const totalMistakes = computed(() => questions.length)
+const reviewedAttempts = computed(() => Object.values(attempts).reduce((sum, record) => sum + record.attempts, 0))
+const reviewedCorrect = computed(() => Object.values(attempts).reduce((sum, record) => sum + record.correct, 0))
+const reviewAccuracy = computed(() => (reviewedAttempts.value === 0 ? null : Math.round((reviewedCorrect.value / reviewedAttempts.value) * 100)))
+const stillWeakCount = computed(() => questions.filter((question) => {
+  const record = attempts[question.id]
+  return !!record && record.attempts > 0 && record.correct < record.attempts
+}).length)
+
+function practiceTag(tag: string) {
+  void router.push({ path: '/tools/takken', query: { tag } })
+}
+
+interface SyllabusMatch { label: string; matched: boolean; matchedTags: string[]; errorCount: number }
+
+function syllabusCoverage(category: Exclude<TakkenCategory, '其他'>): SyllabusMatch[] {
+  const items = TAKKEN_SYLLABUS[category]
+  const actualStats = tagStats.value.filter((stat) => stat.category === category)
+  return items.map((item) => {
+    const matched = actualStats.filter((stat) => item.keywords.some((keyword) => stat.tag.includes(keyword) || keyword.includes(stat.tag)))
+    return {
+      label: item.label,
+      matched: matched.length > 0,
+      matchedTags: [...new Set(matched.map((stat) => takkenTagLabel(stat.tag)))],
+      errorCount: matched.reduce((sum, stat) => sum + stat.total, 0),
+    }
+  }).sort((a, b) => b.errorCount - a.errorCount)
+}
+
+const coverageByCategory = computed(() => sortedCategoryStats.value
+  .filter((stat): stat is CategoryStat & { category: Exclude<TakkenCategory, '其他'> } => stat.category !== '其他')
+  .map((stat) => {
+    const items = syllabusCoverage(stat.category)
+    const maxError = Math.max(1, ...items.map((item) => item.errorCount))
+    return { category: stat.category, items, matchedCount: items.filter((item) => item.matched).length, total: items.length, maxError }
+  })
+  .filter((entry) => entry.total > 0))
+</script>
+
+<template>
+  <div class="page-surface takken-page">
+    <section class="page-hero compact">
+      <div class="container">
+        <span class="eyebrow">宅建考试刷题</span>
+        <h1>薄弱分析</h1>
+        <p>题库里的每一题都是你实际做错过的真题——科目和具体考点都按错题数量从高到低排序，错得最多的排最前面，错题密度（对照真实考试权重）作为参考信息一起展示。</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container takken-shell">
+        <TakkenSubnav />
+
+        <div class="takken-countdown">
+          <div v-if="examDate && daysLeft !== null" class="takken-countdown-number">
+            <strong>{{ Math.abs(daysLeft) }}</strong>
+            <span>{{ daysLeft > 0 ? '天后考试' : daysLeft === 0 ? '就是今天' : '天前已考试' }}</span>
+          </div>
+          <div v-else class="takken-countdown-empty">设置考试日期，开始倒计时</div>
+          <el-date-picker v-model="examDateModel" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" placeholder="选择宅建考试日期" />
+        </div>
+
+        <div class="takken-stats">
+          <div class="takken-stat"><strong>{{ totalMistakes }}</strong><span>累计错题总数</span></div>
+          <div class="takken-stat"><strong>{{ reviewAccuracy === null ? '--' : `${reviewAccuracy}%` }}</strong><span>复习正确率</span></div>
+          <div class="takken-stat"><strong>{{ stillWeakCount }}</strong><span>复习后仍薄弱</span></div>
+        </div>
+
+        <h2 class="takken-section-title">按大科目看错题（共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按错题数量从高到低）</h2>
+        <p class="takken-hint">错题来源就是你上传过的所有题目。每张卡片右下角的"错题密度"= 该科目错题数 ÷ 官方满分，用来参考这个科目按比例来看有多集中——但排序仍然按错题数量，不代表预计考分。</p>
+        <div class="takken-category-grid">
+          <div v-for="stat in sortedCategoryStats" :key="stat.category" class="takken-category-card">
+            <div class="takken-category-card-head">
+              <span>{{ stat.category }}</span>
+              <span class="takken-category-card-count">{{ stat.total }} / {{ stat.weight ?? '?' }} 题</span>
+            </div>
+            <div class="takken-progress-track"><i :style="{ width: `${Math.min(densityOf(stat) ?? 0, 100)}%` }" /></div>
+            <div class="takken-category-card-foot">
+              <span>{{ densityOf(stat) === null ? '暂无官方满分参照' : `错题密度 ${densityOf(stat)}%` }}</span>
+              <span v-if="accuracyOf(stat) !== null" :class="stat.weak > 0 ? 'takken-weak-badge' : 'takken-ok-badge'">复习正确率 {{ accuracyOf(stat) }}%</span>
+              <span v-else class="takken-muted-badge">还没回来复习</span>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="takken-section-title">考点覆盖情况（参考主流教材目录，非官方数据）</h2>
+        <p class="takken-hint">每个科目常见知识点的参考清单，按错题数从高到低排列。灰色条代表"还没有相关错题"——可能是已经掌握，也可能是还没考到过，需要你自己判断，不是数值越高越差的绝对指标。</p>
+        <details v-for="entry in coverageByCategory" :key="entry.category" class="takken-toc takken-coverage">
+          <summary>
+            <span>{{ entry.category }}</span>
+            <span class="takken-coverage-ratio">{{ entry.matchedCount }} / {{ entry.total }} 个考点已出现错题</span>
+          </summary>
+          <div class="takken-heat-list">
+            <div v-for="item in entry.items" :key="item.label" class="takken-heat-row" :class="{ zero: item.errorCount === 0 }">
+              <div class="takken-heat-label">
+                <span>{{ item.label }}</span>
+                <span v-if="item.matchedTags.length" class="takken-heat-source">{{ item.matchedTags.join('、') }}</span>
+              </div>
+              <div class="takken-heat-bar-track"><div class="takken-heat-bar" :style="{ width: `${(item.errorCount / entry.maxError) * 100}%` }" /></div>
+              <div class="takken-heat-count">{{ item.errorCount }} 题</div>
+            </div>
+          </div>
+        </details>
+
+        <h2 class="takken-section-title">薄弱分析表（按错题数量从高到低）</h2>
+        <div class="takken-table" style="--takken-table-cols: 5">
+          <div class="takken-table-row takken-table-row--head">
+            <div class="takken-table-cell">科目</div>
+            <div class="takken-table-cell">考点</div>
+            <div class="takken-table-cell">错题数</div>
+            <div class="takken-table-cell">复习情况</div>
+            <div class="takken-table-cell">操作</div>
+          </div>
+          <div v-for="stat in rankedTagStats" :key="stat.tag" class="takken-table-row">
+            <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
+            <div class="takken-table-cell"><span class="takken-table-cell-label">考点</span>{{ takkenTagLabel(stat.tag) }}</div>
+            <div class="takken-table-cell"><span class="takken-table-cell-label">错题数</span><strong class="takken-mistake-count">{{ stat.total }}</strong></div>
+            <div class="takken-table-cell">
+              <span class="takken-table-cell-label">复习情况</span>
+              <span v-if="accuracyOf(stat) !== null" :class="stat.weak > 0 ? 'takken-weak-badge' : 'takken-ok-badge'">正确率 {{ accuracyOf(stat) }}%（{{ stat.correctSum }}/{{ stat.attemptsSum }}）</span>
+              <span v-else class="takken-muted-badge">还没复习</span>
+            </div>
+            <div class="takken-table-cell">
+              <span class="takken-table-cell-label">操作</span>
+              <button type="button" class="text-link" @click="practiceTag(stat.tag)">去练习<el-icon><ArrowRight /></el-icon></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</template>

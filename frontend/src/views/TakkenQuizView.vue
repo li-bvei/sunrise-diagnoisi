@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { CircleCheck, CircleClose, Star } from '@element-plus/icons-vue'
+import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
+import TakkenTagFilter from '@/components/takken/TakkenTagFilter.vue'
 import rawQuestions from '@/data/takken-questions.json'
 import type { TakkenAttemptMap, TakkenPracticeMode, TakkenQuestion } from '@/types/takken'
 import { loadTakkenAttempts, saveTakkenAttempts } from '@/utils/takkenStorage'
+import { classifyTakkenTag, type TakkenCategory } from '@/utils/takkenCategories'
 
 const questions = rawQuestions as TakkenQuestion[]
 const questionMap = new Map(questions.map((question) => [question.id, question]))
+const allTags = questions.map((question) => question.tag)
 
 const attempts = reactive<TakkenAttemptMap>(loadTakkenAttempts())
 
@@ -33,10 +38,24 @@ function shuffle<T>(list: T[]): T[] {
   return copy
 }
 
+const route = useRoute()
+const initialTag = typeof route.query.tag === 'string' ? route.query.tag : null
+const selectedCategory = ref<TakkenCategory | null>(initialTag ? classifyTakkenTag(initialTag) : null)
+const selectedTag = ref<string | null>(initialTag)
+
+const filteredQuestions = computed(() => {
+  return questions.filter((question) => {
+    if (selectedTag.value) return question.tag === selectedTag.value
+    if (selectedCategory.value) return classifyTakkenTag(question.tag) === selectedCategory.value
+    return true
+  })
+})
+
 function buildOrder(targetMode: TakkenPracticeMode): string[] {
-  if (targetMode === 'wrong') return questions.filter((question) => isWeak(question.id)).map((question) => question.id)
-  if (targetMode === 'random') return shuffle(questions.map((question) => question.id))
-  return questions.map((question) => question.id)
+  const pool = filteredQuestions.value
+  if (targetMode === 'wrong') return pool.filter((question) => isWeak(question.id)).map((question) => question.id)
+  if (targetMode === 'random') return shuffle(pool.map((question) => question.id))
+  return pool.map((question) => question.id)
 }
 
 const mode = ref<TakkenPracticeMode>('all')
@@ -49,6 +68,11 @@ function setMode(target: TakkenPracticeMode) {
   currentIndex.value = 0
 }
 
+watch([selectedCategory, selectedTag], () => {
+  orderIds.value = buildOrder(mode.value)
+  currentIndex.value = 0
+})
+
 const orderedQuestions = computed<TakkenQuestion[]>(() => {
   const list: TakkenQuestion[] = []
   for (const id of orderIds.value) {
@@ -59,6 +83,16 @@ const orderedQuestions = computed<TakkenQuestion[]>(() => {
 })
 const currentQuestion = computed<TakkenQuestion | undefined>(() => orderedQuestions.value[currentIndex.value])
 const progressLabel = computed(() => (orderedQuestions.value.length === 0 ? '' : `${currentIndex.value + 1} / ${orderedQuestions.value.length}`))
+
+const shuffledOptionIndices = ref<number[]>([])
+watch(
+  () => currentQuestion.value?.id,
+  () => {
+    const question = currentQuestion.value
+    shuffledOptionIndices.value = question ? shuffle(question.options.map((_, index) => index)) : []
+  },
+  { immediate: true },
+)
 
 const sessionAnswers = reactive<Record<string, number>>({})
 const selectedOption = computed<number | undefined>(() => {
@@ -72,13 +106,46 @@ const isCorrect = computed(() => {
   return selectedOption.value === question.correct
 })
 
+const comboStreak = ref(0)
+const praiseText = computed(() => {
+  if (comboStreak.value >= 8) return 'Perfect!'
+  if (comboStreak.value >= 5) return 'Amazing!'
+  if (comboStreak.value >= 3) return 'Great!'
+  return 'Good!'
+})
+
+const toastVisible = ref(false)
+const toastText = ref('')
+const toastCombo = ref(0)
+const toastKey = ref(0)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(text: string, combo: number) {
+  toastText.value = text
+  toastCombo.value = combo
+  toastKey.value += 1
+  toastVisible.value = true
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastVisible.value = false }, 1200)
+}
+
+onUnmounted(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+})
+
 function selectOption(index: number) {
   const question = currentQuestion.value
   if (!question || hasAnswered.value) return
   sessionAnswers[question.id] = index
   const record = attempts[question.id] ?? { attempts: 0, correct: 0 }
   record.attempts += 1
-  if (index === question.correct) record.correct += 1
+  if (index === question.correct) {
+    record.correct += 1
+    comboStreak.value += 1
+    showToast(praiseText.value, comboStreak.value)
+  } else {
+    comboStreak.value = 0
+  }
   attempts[question.id] = record
   saveTakkenAttempts(attempts)
 }
@@ -111,16 +178,21 @@ function goNext() {
 
     <section class="section">
       <div class="container takken-shell">
-        <nav class="takken-subnav">
-          <RouterLink to="/tools/takken" class="takken-subnav-link">刷题练习</RouterLink>
-          <RouterLink to="/tools/takken-notes" class="takken-subnav-link">考点速查</RouterLink>
-        </nav>
+        <TakkenSubnav />
 
         <div class="takken-stats">
           <div class="takken-stat"><strong>{{ totalAttempts }}</strong><span>累计练习次数</span></div>
           <div class="takken-stat"><strong>{{ totalAttempts === 0 ? '--' : `${accuracy}%` }}</strong><span>正确率</span></div>
           <div class="takken-stat"><strong>{{ weakCount }}</strong><span>当前薄弱题</span></div>
         </div>
+
+        <TakkenTagFilter
+          :tags="allTags"
+          :category="selectedCategory"
+          :tag="selectedTag"
+          @update:category="selectedCategory = $event"
+          @update:tag="selectedTag = $event"
+        />
 
         <div class="filter-bar takken-mode-bar">
           <div class="filter-pills">
@@ -133,8 +205,9 @@ function goNext() {
 
         <div v-if="!currentQuestion" class="takken-empty">
           <el-icon :size="34"><CircleCheck /></el-icon>
-          <h3>{{ mode === 'wrong' ? '太棒了，没有错题了' : '题库暂无题目' }}</h3>
-          <p v-if="mode === 'wrong'">切换到"全部题目"继续练习，答错的题目会自动出现在这里。</p>
+          <h3>{{ filteredQuestions.length === 0 ? '这个分类下还没有题目' : mode === 'wrong' ? '太棒了，这个范围内没有错题' : '题库暂无题目' }}</h3>
+          <p v-if="filteredQuestions.length > 0 && mode === 'wrong'">切换到"全部题目"继续练习，答错的题目会自动出现在这里。</p>
+          <p v-else-if="filteredQuestions.length === 0">试试切换到其他分类，或选择"全部类型"。</p>
         </div>
 
         <template v-else>
@@ -146,16 +219,16 @@ function goNext() {
             <p class="takken-stem">{{ currentQuestion.stem }}</p>
             <div class="takken-options">
               <button
-                v-for="(option, index) in currentQuestion.options"
-                :key="index"
+                v-for="(originalIndex, displayIndex) in shuffledOptionIndices"
+                :key="originalIndex"
                 type="button"
                 class="takken-option"
-                :class="optionState(index)"
+                :class="optionState(originalIndex)"
                 :disabled="hasAnswered"
-                @click="selectOption(index)"
+                @click="selectOption(originalIndex)"
               >
-                <span class="takken-option-mark">{{ String.fromCharCode(65 + index) }}</span>
-                <span>{{ option }}</span>
+                <span class="takken-option-mark">{{ String.fromCharCode(65 + displayIndex) }}</span>
+                <span>{{ currentQuestion.options[originalIndex] }}</span>
               </button>
             </div>
 
@@ -178,5 +251,12 @@ function goNext() {
         <el-button type="primary" size="large" :disabled="currentIndex >= orderedQuestions.length - 1" @click="goNext">下一题</el-button>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="toastVisible" :key="toastKey" class="takken-toast">
+        <strong>{{ toastText }}</strong>
+        <span v-if="toastCombo >= 2" class="takken-toast-combo">🔥 连对 {{ toastCombo }} 题</span>
+      </div>
+    </Teleport>
   </div>
 </template>
