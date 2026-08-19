@@ -6,7 +6,6 @@ export const messages = {
     common: {
       viewTools: '查看全部工具',
       viewDetails: '查看详情',
-      upcoming: '即将上线',
       available: '可使用',
       useNow: '立即使用',
       backTools: '返回工具中心',
@@ -16,12 +15,6 @@ export const messages = {
       result: '可获得的结果',
       category: '所属分类',
       learnMore: '了解更多',
-    },
-    dialog: {
-      title: '即将上线',
-      body: '该功能即将上线。正式开放后，您可以通过分步问答完成相关条件与费用的初步诊断。',
-      skilledBody: '该功能即将上线。正式开放后，您可以通过分步问答完成相关条件的初步诊断。',
-      confirm: '我知道了',
     },
     footer: {
       summary: '为在日生活与经营提供清晰、可靠的专业初步诊断。',
@@ -44,7 +37,6 @@ export const messages = {
     common: {
       viewTools: '診断ツールを見る',
       viewDetails: '詳細を見る',
-      upcoming: '近日公開',
       available: '利用可能',
       useNow: '今すぐ利用',
       backTools: 'ツール一覧へ戻る',
@@ -54,12 +46,6 @@ export const messages = {
       result: '確認できる内容',
       category: 'カテゴリー',
       learnMore: '詳しく見る',
-    },
-    dialog: {
-      title: '近日公開',
-      body: 'この機能は近日公開予定です。公開後は、段階式の質問に回答することで、関連する条件や費用を簡易診断できます。',
-      skilledBody: 'この機能は近日公開予定です。公開後は、段階式の質問に回答することで、関連する条件を簡易診断できます。',
-      confirm: '確認しました',
     },
     footer: {
       summary: '日本での暮らしと事業に、分かりやすく信頼できる専門診断を。',

@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
 import ToolCard from '@/components/ToolCard.vue'
-import ComingSoonDialog from '@/components/ComingSoonDialog.vue'
 import { categories, tools } from '@/data/tools'
 import type { DiagnosisTool, ToolCategory } from '@/types/content'
 import { useSettingsStore } from '@/stores/settings'
@@ -11,23 +10,22 @@ import { useSettingsStore } from '@/stores/settings'
 const settings = useSettingsStore()
 const route = useRoute()
 const router = useRouter()
-const dialogOpen = ref(false)
 const validCategory = categories.some((item) => item.id === route.query.category)
 const activeCategory = ref<'all' | ToolCategory>(validCategory ? route.query.category as ToolCategory : 'all')
 const filteredTools = computed(() => activeCategory.value === 'all' ? tools : tools.filter((tool) => tool.category === activeCategory.value))
 const copy = computed(() => settings.locale === 'zh-CN' ? {
   eyebrow: '全部工具',
   title: '专业诊断工具中心',
-  description: '从在留资格、不动产、公司经营、工资到年金手续，选择适合您当前情况的诊断工具。',
+  description: '从在留资格、不动产、收入社保、年金到在日记录，选择适合您当前情况的实用工具。',
   all: '全部',
-  notice: '“高度人才积分计算”（含特别高度人才J-Skip诊断）、“永住申请条件诊断”、“租房初期费用诊断”和“宅建考试刷题”现已可使用。其余工具将陆续上线。',
+  notice: '以下项目均已开放，可直接进入使用。计算结果为简易参考值。',
   showing: `显示 ${filteredTools.value.length} 项工具`,
 } : {
   eyebrow: '全ツール',
   title: '専門診断ツールセンター',
-  description: '在留資格、不動産、会社経営、給与、年金手続きから、現在の状況に合う診断ツールをお選びください。',
+  description: '在留資格、不動産、収入・社会保険、年金、在日記録から必要なツールをお選びください。',
   all: 'すべて',
-  notice: '「高度人材ポイント計算」（特別高度人材J-Skip診断を含む）、「永住許可要件診断」、「賃貸初期費用診断」、「宅建過去問演習」をご利用いただけます。その他のツールも順次公開します。',
+  notice: '以下のツールはすべて公開済みです。計算結果は簡易的な参考値です。',
   showing: `${filteredTools.value.length}件のツールを表示`,
 })
 
@@ -37,7 +35,6 @@ watch(activeCategory, (value) => {
 
 function selectTool(tool: DiagnosisTool) {
   if (tool.route) void router.push(tool.route)
-  else dialogOpen.value = true
 }
 </script>
 
@@ -63,6 +60,5 @@ function selectTool(tool: DiagnosisTool) {
         <div class="tool-grid"><ToolCard v-for="tool in filteredTools" :key="tool.id" :tool="tool" @select="selectTool" /></div>
       </div>
     </section>
-    <ComingSoonDialog v-model="dialogOpen" />
   </div>
 </template>

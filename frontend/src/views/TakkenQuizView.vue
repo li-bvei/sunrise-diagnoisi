@@ -228,11 +228,15 @@ function goNext() {
                 @click="selectOption(originalIndex)"
               >
                 <span class="takken-option-mark">{{ String.fromCharCode(65 + displayIndex) }}</span>
-                <span>{{ currentQuestion.options[originalIndex] }}</span>
+                <span class="takken-option-body">
+                  {{ currentQuestion.options[originalIndex] }}
+                  <em v-if="hasAnswered" class="takken-option-original">解析原文中的"选项{{ originalIndex + 1 }}"</em>
+                </span>
               </button>
             </div>
 
             <div v-if="hasAnswered" class="takken-feedback" :class="isCorrect ? 'correct' : 'wrong'">
+              <p class="takken-feedback-note">下方解析按原题顺序讲解，每个选项上已标出对应"选项几"，方便和乱序后的 A/B/C/D 对照。</p>
               <div class="takken-feedback-title" :class="isCorrect ? 'correct' : 'wrong'">
                 <el-icon><CircleCheck v-if="isCorrect" /><CircleClose v-else /></el-icon>
                 {{ isCorrect ? '答对了' : '答错了' }}

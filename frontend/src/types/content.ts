@@ -2,8 +2,8 @@ export type Locale = 'zh-CN' | 'ja-JP'
 
 export type LocalizedText = Record<Locale, string>
 
-export type ToolCategory = 'residence' | 'property' | 'business' | 'life' | 'exam'
-export type ToolStatus = 'available' | 'upcoming'
+export type ToolCategory = 'residence' | 'property' | 'income' | 'pension' | 'records' | 'exam'
+export type ToolStatus = 'available'
 
 export interface DiagnosisTool {
   id: string

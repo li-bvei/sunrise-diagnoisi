@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, Check, CircleCheck, InfoFilled, Warning } from '@element-plus/icons-vue'
 import SectionHeading from '@/components/SectionHeading.vue'
 import ToolCard from '@/components/ToolCard.vue'
-import ComingSoonDialog from '@/components/ComingSoonDialog.vue'
 import { categories, tools } from '@/data/tools'
 import type { DiagnosisTool } from '@/types/content'
 import { iconMap, type IconName } from '@/utils/icons'
@@ -12,7 +11,6 @@ import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
 const router = useRouter()
-const dialogOpen = ref(false)
 
 const copy = computed(() => settings.locale === 'zh-CN' ? {
   heroEyebrow: '面向在日生活与经营的专业工具',
@@ -33,8 +31,8 @@ const copy = computed(() => settings.locale === 'zh-CN' ? {
   categoryDesc: '按照在日生活与经营中的实际场景，选择对应的专业诊断。',
   count: '项工具',
   toolsEyebrow: '专业诊断工具',
-  toolsTitle: '10 个专业工具，从在留诊断开始',
-  toolsDesc: '高度人才积分计算（含特别高度人才J-Skip诊断）、永住申请条件诊断、租房初期费用诊断与宅建考试刷题现已可用，其余专业工具将陆续上线。',
+  toolsTitle: '11 个已开放的专业与实用工具',
+  toolsDesc: '覆盖在留、永住、不动产、收入社保、年金、在日记录与资格考试，所有卡片都可直接使用。',
   processEyebrow: '使用流程',
   processTitle: '三步获得清晰的初步判断',
   processDesc: '正式使用时，统一填写姓名和电话号码；出生日期等信息仅在诊断确实需要时填写。',
@@ -69,8 +67,8 @@ const copy = computed(() => settings.locale === 'zh-CN' ? {
   categoryDesc: '日本での暮らしや事業の場面に合わせて、必要な専門診断をお選びください。',
   count: 'ツール',
   toolsEyebrow: '専門診断ツール',
-  toolsTitle: '10個の専門ツール、在留診断から公開',
-  toolsDesc: '高度人材ポイント計算（特別高度人材J-Skip診断を含む）、永住許可要件診断、賃貸初期費用診断、宅建過去問演習をご利用いただけます。その他のツールも順次公開します。',
+  toolsTitle: '公開済みの専門・実用ツール11種',
+  toolsDesc: '在留、永住、不動産、収入・社会保険、年金、在日記録、資格試験の全ツールをすぐに利用できます。',
   processEyebrow: 'ご利用の流れ',
   processTitle: '3つのステップで初期判断を分かりやすく',
   processDesc: '正式利用時には氏名と電話番号を入力し、生年月日などは診断上必要な場合にのみ入力します。',
@@ -93,11 +91,7 @@ function goToTools() {
 }
 
 function selectTool(tool: DiagnosisTool) {
-  if (tool.route) {
-    void router.push(tool.route)
-  } else {
-    dialogOpen.value = true
-  }
+  if (tool.route) void router.push(tool.route)
 }
 </script>
 
@@ -192,6 +186,5 @@ function selectTool(tool: DiagnosisTool) {
         </div>
       </div>
     </section>
-    <ComingSoonDialog v-model="dialogOpen" />
   </div>
 </template>

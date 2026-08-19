@@ -16,9 +16,7 @@ const icon = computed(() => iconMap[props.tool.icon as IconName])
   <article class="tool-card">
     <div class="tool-card-topline">
       <span class="tool-icon"><el-icon :size="22"><component :is="icon" /></el-icon></span>
-      <el-tag :type="tool.status === 'available' ? 'success' : 'info'" effect="light" round>
-        {{ tool.status === 'available' ? settings.dictionary.common.available : settings.dictionary.common.upcoming }}
-      </el-tag>
+      <el-tag type="success" effect="light" round>{{ settings.dictionary.common.available }}</el-tag>
     </div>
     <span class="tool-category">{{ settings.text(categoryName(tool.category)) }}</span>
     <h3>{{ settings.text(tool.name) }}</h3>
@@ -34,7 +32,7 @@ const icon = computed(() => iconMap[props.tool.icon as IconName])
       </div>
     </dl>
     <button class="text-link" type="button" @click="emit('select', tool)">
-      {{ tool.status === 'available' ? settings.dictionary.common.useNow : settings.dictionary.common.viewDetails }}
+      {{ settings.dictionary.common.useNow }}
       <el-icon><ArrowRight /></el-icon>
     </button>
   </article>
