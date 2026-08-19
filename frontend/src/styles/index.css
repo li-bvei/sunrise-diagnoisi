@@ -531,7 +531,10 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-toc[open] summary::after { transform: rotate(180deg); }
 .takken-toc ol { margin: 0; padding: 0 18px 16px 34px; color: var(--color-text-secondary); font-size: 13px; }
 .takken-toc li { margin-bottom: 6px; }
-.takken-toc a { color: var(--color-primary); font-weight: 600; }
+.takken-toc a { color: var(--color-primary); font-weight: 600; cursor: pointer; }
+.takken-toc a.active { text-decoration: underline; text-underline-offset: 3px; }
+.takken-back-to-top { position: fixed; right: 18px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 45; width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-card); color: var(--color-primary); box-shadow: 0 10px 24px rgba(32,58,72,.16); cursor: pointer; }
+.takken-back-to-top:hover { border-color: #a9bdc8; }
 .takken-coverage { margin-bottom: 12px; }
 .takken-coverage summary { font-size: 15px; }
 .takken-coverage-ratio { color: var(--color-text-secondary); font-size: 12px; font-weight: 600; }
@@ -623,6 +626,11 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-countdown .el-input__wrapper { background: white; }
 .takken-section-title { margin: 28px 0 14px; font-size: 16px; }
 .takken-hint { margin: -6px 0 16px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.takken-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 22px; padding: 18px; border: 1px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-card); }
+.takken-upload-input-hidden { display: none; }
+.takken-upload-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--color-text-secondary); font-size: 13px; }
+.takken-upload-meta strong { color: var(--color-text); }
+.takken-upload-error { flex-basis: 100%; margin: 0; color: #a03d3d; font-size: 13px; }
 .takken-category-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 8px; }
 .takken-category-card { padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-card); }
 .takken-category-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--color-text); }
@@ -630,6 +638,7 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-category-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-secondary); }
 .takken-progress-track { height: 6px; border-radius: 999px; background: var(--color-page); overflow: hidden; }
 .takken-progress-track i { display: block; height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s; }
+.takken-progress-track i.warn { background: var(--color-danger); }
 .takken-weak-badge, .takken-ok-badge, .takken-muted-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
 .takken-weak-badge { background: #fbeeee; color: #a03d3d; }
 .takken-ok-badge { background: #eef7f2; color: #2d715a; }

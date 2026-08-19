@@ -69,3 +69,18 @@ export interface TakkenTopic {
   source: string
   sections: TakkenTopicSection[]
 }
+
+export interface TakkenUploadRecord {
+  date: string
+  label: string
+  url: string | null
+  correct: boolean
+  categoryRaw: string
+  subItemRaw: string
+}
+
+export interface TakkenUploadPayload {
+  fileName: string
+  uploadedAt: string
+  records: TakkenUploadRecord[]
+}

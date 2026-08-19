@@ -1,17 +1,100 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ArrowRight, Delete, UploadFilled } from '@element-plus/icons-vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
 import rawQuestions from '@/data/takken-questions.json'
-import type { TakkenAttemptMap, TakkenQuestion } from '@/types/takken'
-import { loadTakkenAttempts, loadTakkenExamDate, saveTakkenExamDate } from '@/utils/takkenStorage'
-import { classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, TAKKEN_EXAM_TOTAL_QUESTIONS, type TakkenCategory } from '@/utils/takkenCategories'
+import type { TakkenAttemptMap, TakkenQuestion, TakkenUploadPayload } from '@/types/takken'
+import { clearTakkenUpload, loadTakkenAttempts, loadTakkenExamDate, loadTakkenUpload, saveTakkenExamDate, saveTakkenUpload } from '@/utils/takkenStorage'
+import { classifyCsvCategory, classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, TAKKEN_EXAM_TOTAL_QUESTIONS, type TakkenCategory } from '@/utils/takkenCategories'
+import { TakkenCsvParseError, parseTakkenCsvFile } from '@/utils/takkenCsvImport'
 import { TAKKEN_SYLLABUS } from '@/data/takkenSyllabus'
 
 const questions = rawQuestions as TakkenQuestion[]
 const attempts: TakkenAttemptMap = loadTakkenAttempts()
 const router = useRouter()
+
+const uploadPayload = ref<TakkenUploadPayload | null>(loadTakkenUpload())
+const uploadError = ref<string | null>(null)
+const uploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function pickFile() {
+  fileInput.value?.click()
+}
+
+async function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploading.value = true
+  uploadError.value = null
+  try {
+    const records = await parseTakkenCsvFile(file)
+    const payload: TakkenUploadPayload = { fileName: file.name, uploadedAt: new Date().toISOString(), records }
+    saveTakkenUpload(payload)
+    uploadPayload.value = payload
+  } catch (error) {
+    uploadError.value = error instanceof TakkenCsvParseError ? error.message : '文件解析失败，请确认这是导出的刷题记录 CSV。'
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+function removeUpload() {
+  clearTakkenUpload()
+  uploadPayload.value = null
+}
+
+interface CsvStat { total: number; correct: number }
+
+function csvAccuracy(stat: CsvStat): number {
+  return stat.total === 0 ? 0 : Math.round((stat.correct / stat.total) * 100)
+}
+
+const csvOverall = computed<CsvStat | null>(() => {
+  if (!uploadPayload.value) return null
+  const records = uploadPayload.value.records
+  return { total: records.length, correct: records.filter((record) => record.correct).length }
+})
+
+interface CsvCategoryStat extends CsvStat { category: TakkenCategory }
+
+const csvCategoryStats = computed<CsvCategoryStat[]>(() => {
+  if (!uploadPayload.value) return []
+  const map = new Map<TakkenCategory, CsvCategoryStat>()
+  for (const record of uploadPayload.value.records) {
+    const category = classifyCsvCategory(record.categoryRaw)
+    let entry = map.get(category)
+    if (!entry) {
+      entry = { category, total: 0, correct: 0 }
+      map.set(category, entry)
+    }
+    entry.total += 1
+    if (record.correct) entry.correct += 1
+  }
+  return [...map.values()].sort((a, b) => csvAccuracy(a) - csvAccuracy(b))
+})
+
+interface CsvSubStat extends CsvStat { category: TakkenCategory; subItem: string }
+
+const csvSubStats = computed<CsvSubStat[]>(() => {
+  if (!uploadPayload.value) return []
+  const map = new Map<string, CsvSubStat>()
+  for (const record of uploadPayload.value.records) {
+    const category = classifyCsvCategory(record.categoryRaw)
+    const key = `${category}__${record.subItemRaw}`
+    let entry = map.get(key)
+    if (!entry) {
+      entry = { category, subItem: record.subItemRaw, total: 0, correct: 0 }
+      map.set(key, entry)
+    }
+    entry.total += 1
+    if (record.correct) entry.correct += 1
+  }
+  return [...map.values()].sort((a, b) => csvAccuracy(a) - csvAccuracy(b))
+})
 
 const examDate = ref<string | null>(loadTakkenExamDate())
 const examDateModel = computed({
@@ -132,7 +215,7 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
       <div class="container">
         <span class="eyebrow">宅建考试刷题</span>
         <h1>薄弱分析</h1>
-        <p>题库里的每一题都是你实际做错过的真题——科目和具体考点都按错题数量从高到低排序，错得最多的排最前面，错题密度（对照真实考试权重）作为参考信息一起展示。</p>
+        <p>上传外部刷题网站导出的真实练习记录，按正确率找出薄弱科目和考点；下方还保留了本站错题库自己的统计，两份数据分开展示。</p>
       </div>
     </section>
 
@@ -149,13 +232,67 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
           <el-date-picker v-model="examDateModel" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" placeholder="选择宅建考试日期" />
         </div>
 
+        <h2 class="takken-section-title">上传练习记录（CSV）</h2>
+        <p class="takken-hint">支持 takken-siken.com 等刷题网站导出的记录（需要包含"学習日/出典/正誤/分野/細目"这些列），自动识别 Shift-JIS 编码。数据只存在本机浏览器里，不会上传到服务器；重新选择文件会覆盖上一次的记录。</p>
+        <div class="takken-upload">
+          <input ref="fileInput" type="file" accept=".csv,text/csv" class="takken-upload-input-hidden" @change="handleFileChange">
+          <el-button size="large" :loading="uploading" @click="pickFile"><el-icon><UploadFilled /></el-icon>{{ uploadPayload ? '重新上传 CSV' : '选择 CSV 文件' }}</el-button>
+          <div v-if="uploadPayload" class="takken-upload-meta">
+            <span>已加载 <strong>{{ uploadPayload.fileName }}</strong> · {{ uploadPayload.records.length }} 条记录</span>
+            <button type="button" class="text-link" @click="removeUpload"><el-icon><Delete /></el-icon>清除</button>
+          </div>
+          <p v-if="uploadError" class="takken-upload-error">{{ uploadError }}</p>
+        </div>
+
+        <template v-if="uploadPayload && csvOverall">
+          <div class="takken-stats">
+            <div class="takken-stat"><strong>{{ csvOverall.total }}</strong><span>CSV 练习总题数</span></div>
+            <div class="takken-stat"><strong>{{ csvAccuracy(csvOverall) }}%</strong><span>真实正确率</span></div>
+            <div class="takken-stat"><strong>{{ csvOverall.total - csvOverall.correct }}</strong><span>CSV 中的错题数</span></div>
+          </div>
+
+          <h2 class="takken-section-title">按大科目看真实正确率（按正确率从低到高）</h2>
+          <p class="takken-hint">数据来自你上传的 CSV，涵盖了做对和做错的完整记录，比只看错题库更能反映真实水平。</p>
+          <div class="takken-category-grid">
+            <div v-for="stat in csvCategoryStats" :key="stat.category" class="takken-category-card">
+              <div class="takken-category-card-head">
+                <span>{{ stat.category }}</span>
+                <span class="takken-category-card-count">{{ stat.correct }} / {{ stat.total }} 题</span>
+              </div>
+              <div class="takken-progress-track"><i :class="{ warn: csvAccuracy(stat) < 60 }" :style="{ width: `${csvAccuracy(stat)}%` }" /></div>
+              <div class="takken-category-card-foot">
+                <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">正确率 {{ csvAccuracy(stat) }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <h2 class="takken-section-title">按细目看真实正确率（按正确率从低到高）</h2>
+          <div class="takken-table" style="--takken-table-cols: 4">
+            <div class="takken-table-row takken-table-row--head">
+              <div class="takken-table-cell">科目</div>
+              <div class="takken-table-cell">细目</div>
+              <div class="takken-table-cell">练习数</div>
+              <div class="takken-table-cell">正确率</div>
+            </div>
+            <div v-for="stat in csvSubStats" :key="`${stat.category}-${stat.subItem}`" class="takken-table-row">
+              <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
+              <div class="takken-table-cell"><span class="takken-table-cell-label">细目</span>{{ stat.subItem }}</div>
+              <div class="takken-table-cell"><span class="takken-table-cell-label">练习数</span>{{ stat.correct }} / {{ stat.total }}</div>
+              <div class="takken-table-cell">
+                <span class="takken-table-cell-label">正确率</span>
+                <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">{{ csvAccuracy(stat) }}%</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <div class="takken-stats">
           <div class="takken-stat"><strong>{{ totalMistakes }}</strong><span>累计错题总数</span></div>
           <div class="takken-stat"><strong>{{ reviewAccuracy === null ? '--' : `${reviewAccuracy}%` }}</strong><span>复习正确率</span></div>
           <div class="takken-stat"><strong>{{ stillWeakCount }}</strong><span>复习后仍薄弱</span></div>
         </div>
 
-        <h2 class="takken-section-title">按大科目看错题（共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按错题数量从高到低）</h2>
+        <h2 class="takken-section-title">按大科目看错题库（共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按错题数量从高到低）</h2>
         <p class="takken-hint">错题来源就是你上传过的所有题目。每张卡片右下角的"错题密度"= 该科目错题数 ÷ 官方满分，用来参考这个科目按比例来看有多集中——但排序仍然按错题数量，不代表预计考分。</p>
         <div class="takken-category-grid">
           <div v-for="stat in sortedCategoryStats" :key="stat.category" class="takken-category-card">

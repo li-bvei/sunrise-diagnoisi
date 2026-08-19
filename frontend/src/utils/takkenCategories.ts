@@ -33,3 +33,18 @@ export function takkenTagLabel(tag: string): string {
   const parts = tag.split('・')
   return parts.length > 1 ? parts.slice(1).join('・') : tag
 }
+
+// CSV 上传的"分野"是刷题网站原始日语分类，官方"税・その他"这一块通常把税金和不动产价格评定
+// 算作同一个3题区块，所以这里把"不動産価格の評定"并入"税に関する法令"。
+const CSV_CATEGORY_MAP: Record<string, TakkenCategory> = {
+  '権利関係': '权利关系',
+  '法令上の制限': '法令上的限制',
+  '税に関する法令': '税に関する法令',
+  '不動産価格の評定': '税に関する法令',
+  '宅地建物取引業法等': '宅地建物取引业法等',
+  '免除科目': '5问免除科目',
+}
+
+export function classifyCsvCategory(raw: string): TakkenCategory {
+  return CSV_CATEGORY_MAP[raw] ?? '其他'
+}
