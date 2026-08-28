@@ -512,7 +512,7 @@ p, h1, h2, h3 { margin-top: 0; }
 
 .takken-page { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 .takken-shell { max-width: 720px; }
-.takken-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+.takken-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
 .takken-stat { padding: 16px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-card); text-align: center; }
 .takken-stat strong { display: block; font-size: 22px; color: var(--color-primary); }
 .takken-stat span { color: var(--color-text-secondary); font-size: 12px; }
@@ -589,7 +589,12 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-option:disabled { cursor: default; }
 .takken-option-mark { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-page); color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 12px; font-weight: 700; }
 .takken-option-body { display: block; }
-.takken-option-original { display: block; margin-top: 4px; color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 11px; font-style: normal; }
+.takken-option-explain { display: block; margin-top: 4px; color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 11px; font-style: normal; line-height: 1.6; }
+.takken-favorite-toggle { flex: 0 0 auto; margin-left: auto; padding: 2px; border: 0; background: transparent; color: var(--color-warning); cursor: pointer; }
+.takken-retry { margin-top: 14px; }
+.takken-picker-trigger { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); color: var(--color-text); font-size: 13px; font-weight: 600; cursor: pointer; }
+.takken-picker-trigger:hover { border-color: #a9bdc8; }
+.takken-progress-label { margin: -18px 0 20px; color: var(--color-text-secondary); font-size: 12px; text-align: right; }
 .takken-feedback-note { margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border); color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 12px; line-height: 1.7; }
 .takken-option.correct { border-color: #a9d3b8; background: #eef7f2; }
 .takken-option.correct .takken-option-mark { border-color: var(--color-success); background: var(--color-success); color: white; }
@@ -617,6 +622,28 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; border-top: 1px solid var(--color-border); background: rgba(255,255,255,.97); backdrop-filter: blur(10px); box-shadow: 0 -10px 26px rgba(32,58,72,.08); }
 .takken-bottom-nav-inner { display: flex; gap: 12px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
 .takken-bottom-nav .el-button { flex: 1; margin-left: 0; }
+.takken-picker { display: grid; gap: 14px; }
+.takken-picker-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.takken-picker-row .el-select { width: 100%; }
+.takken-picker-status { margin: 0; }
+.takken-picker-count { margin: 0; color: var(--color-text-secondary); font-size: 12px; }
+.takken-picker-list { display: grid; gap: 10px; }
+.takken-picker-item { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-card); text-align: left; cursor: pointer; }
+.takken-picker-item:hover { border-color: #a9bdc8; }
+.takken-picker-item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.takken-picker-title { font-weight: 700; font-size: 13px; color: var(--color-text); }
+.takken-picker-result { font-weight: 700; }
+.takken-picker-result.correct { color: var(--color-success); }
+.takken-picker-result.wrong { color: var(--color-danger); }
+.takken-picker-item-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-text-secondary); font-size: 12px; }
+.takken-picker-item-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; }
+.takken-picker-badge { padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+.takken-picker-badge.unpracticed { background: var(--color-page); color: var(--color-text-secondary); }
+.takken-picker-badge.needsReview { background: #fbeeee; color: #a03d3d; }
+.takken-picker-badge.mastered { background: #eef7f2; color: #2d715a; }
+.takken-picker-badge.favorite { background: #fdf0dc; color: #b9833f; }
+.takken-picker-attempts { color: var(--color-text-secondary); }
+.takken-picker-empty { padding: 30px 0; color: var(--color-text-secondary); font-size: 13px; text-align: center; }
 
 .takken-countdown { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; padding: 20px 22px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary)); }
 .takken-countdown-number { display: flex; align-items: baseline; gap: 8px; color: white; }
@@ -636,6 +663,9 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-category-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--color-text); }
 .takken-category-card-count { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }
 .takken-category-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--color-text-secondary); }
+.takken-category-card-counts { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--color-text-secondary); }
+.takken-category-card-counts strong { color: var(--color-text); font-size: 13px; }
+.takken-category-card-counts .takken-weak-badge strong, .takken-category-card-counts .takken-ok-badge strong { color: inherit; }
 .takken-progress-track { height: 6px; border-radius: 999px; background: var(--color-page); overflow: hidden; }
 .takken-progress-track i { display: block; height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s; }
 .takken-progress-track i.warn { background: var(--color-danger); }
@@ -666,6 +696,7 @@ p, h1, h2, h3 { margin-top: 0; }
   .takken-topic { padding: 18px; }
   .takken-stat { padding: 13px 8px; }
   .takken-stat strong { font-size: 19px; }
+  .takken-picker-row { grid-template-columns: 1fr; }
 }
 
 .site-footer { padding-top: 62px; background: #203640; color: #d9e2e6; }

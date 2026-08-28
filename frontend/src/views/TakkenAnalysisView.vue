@@ -3,14 +3,14 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, Delete, UploadFilled } from '@element-plus/icons-vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
-import rawQuestions from '@/data/takken-questions.json'
-import type { TakkenAttemptMap, TakkenQuestion, TakkenUploadPayload } from '@/types/takken'
-import { clearTakkenUpload, loadTakkenAttempts, loadTakkenExamDate, loadTakkenUpload, saveTakkenExamDate, saveTakkenUpload } from '@/utils/takkenStorage'
+import { TAKKEN_QUESTIONS } from '@/utils/takkenQuestionModel'
+import type { TakkenAttemptMap, TakkenUploadPayload } from '@/types/takken'
+import { clearTakkenUpload, isMastered, loadTakkenAttempts, loadTakkenExamDate, loadTakkenUpload, needsReview, saveTakkenExamDate, saveTakkenUpload } from '@/utils/takkenStorage'
 import { classifyCsvCategory, classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, TAKKEN_EXAM_TOTAL_QUESTIONS, type TakkenCategory } from '@/utils/takkenCategories'
 import { TakkenCsvParseError, parseTakkenCsvFile } from '@/utils/takkenCsvImport'
 import { TAKKEN_SYLLABUS } from '@/data/takkenSyllabus'
 
-const questions = rawQuestions as TakkenQuestion[]
+const questions = TAKKEN_QUESTIONS
 const attempts: TakkenAttemptMap = loadTakkenAttempts()
 const router = useRouter()
 
@@ -110,33 +110,29 @@ const daysLeft = computed(() => {
   return Math.ceil((target.getTime() - Date.now()) / 86_400_000)
 })
 
-interface TagStat { tag: string; category: TakkenCategory; total: number; attempted: number; attemptsSum: number; correctSum: number; weak: number }
+// 这几个概念必须分开：原始错题数量（题库里有几题）、已复习数量（在本站至少答过一次）、
+// 仍需复习数量（还没连续答对2次）、已掌握数量（连续答对2次以上）。不再用"错题密度"
+// "复习正确率"这种把数量和正确率混在一起、容易被误读成"整个科目掌握了多少"的指标。
+interface TagStat { tag: string; category: TakkenCategory; total: number; reviewed: number; needsReview: number; mastered: number }
 
 const tagStats = computed<TagStat[]>(() => {
   const map = new Map<string, TagStat>()
   for (const question of questions) {
     let stat = map.get(question.tag)
     if (!stat) {
-      stat = { tag: question.tag, category: classifyTakkenTag(question.tag), total: 0, attempted: 0, attemptsSum: 0, correctSum: 0, weak: 0 }
+      stat = { tag: question.tag, category: classifyTakkenTag(question.tag), total: 0, reviewed: 0, needsReview: 0, mastered: 0 }
       map.set(question.tag, stat)
     }
     stat.total += 1
     const record = attempts[question.id]
-    if (record && record.attempts > 0) {
-      stat.attempted += 1
-      stat.attemptsSum += record.attempts
-      stat.correctSum += record.correct
-      if (record.correct < record.attempts) stat.weak += 1
-    }
+    if (record && record.attempts > 0) stat.reviewed += 1
+    if (needsReview(record)) stat.needsReview += 1
+    if (isMastered(record)) stat.mastered += 1
   }
   return [...map.values()]
 })
 
-function accuracyOf(stat: { attemptsSum: number; correctSum: number }): number | null {
-  return stat.attemptsSum === 0 ? null : Math.round((stat.correctSum / stat.attemptsSum) * 100)
-}
-
-interface CategoryStat { category: TakkenCategory; total: number; attempted: number; attemptsSum: number; correctSum: number; weak: number; weight: number | null }
+interface CategoryStat { category: TakkenCategory; total: number; reviewed: number; needsReview: number; mastered: number; weight: number | null }
 
 const categoryStats = computed<CategoryStat[]>(() => {
   const map = new Map<string, CategoryStat>()
@@ -144,40 +140,31 @@ const categoryStats = computed<CategoryStat[]>(() => {
     let entry = map.get(stat.category)
     if (!entry) {
       const weight = stat.category === '其他' ? null : TAKKEN_CATEGORY_WEIGHTS[stat.category]
-      entry = { category: stat.category, total: 0, attempted: 0, attemptsSum: 0, correctSum: 0, weak: 0, weight }
+      entry = { category: stat.category, total: 0, reviewed: 0, needsReview: 0, mastered: 0, weight }
       map.set(stat.category, entry)
     }
     entry.total += stat.total
-    entry.attempted += stat.attempted
-    entry.attemptsSum += stat.attemptsSum
-    entry.correctSum += stat.correctSum
-    entry.weak += stat.weak
+    entry.reviewed += stat.reviewed
+    entry.needsReview += stat.needsReview
+    entry.mastered += stat.mastered
   }
   const order = [...TAKKEN_CATEGORY_ORDER, '其他']
   return order.map((category) => map.get(category)).filter((entry): entry is CategoryStat => !!entry)
 })
 
-function densityOf(stat: { total: number; weight: number | null }): number | null {
-  return stat.weight ? Math.round((stat.total / stat.weight) * 100) : null
-}
-
-// 主排序按错题数量（哪个大科目错得最多），错题密度（错题数 ÷ 官方满分）作为同等数量下的
-// 参考信息展示在卡片上，不参与主排序。
+// 主排序按原始错题数量（哪个大科目错得最多排最前）；已掌握/仍需复习作为同等数量下的参考信息。
 const sortedCategoryStats = computed(() => [...categoryStats.value].sort((a, b) => b.total - a.total))
 
+// 细分知识点按"仍需复习数量"从高到低排——这是下一步最该优先复习的地方。
 const rankedTagStats = computed(() => [...tagStats.value].sort((a, b) => {
-  if (b.total !== a.total) return b.total - a.total
-  return (accuracyOf(a) ?? -1) - (accuracyOf(b) ?? -1)
+  if (b.needsReview !== a.needsReview) return b.needsReview - a.needsReview
+  return b.total - a.total
 }))
 
 const totalMistakes = computed(() => questions.length)
-const reviewedAttempts = computed(() => Object.values(attempts).reduce((sum, record) => sum + record.attempts, 0))
-const reviewedCorrect = computed(() => Object.values(attempts).reduce((sum, record) => sum + record.correct, 0))
-const reviewAccuracy = computed(() => (reviewedAttempts.value === 0 ? null : Math.round((reviewedCorrect.value / reviewedAttempts.value) * 100)))
-const stillWeakCount = computed(() => questions.filter((question) => {
-  const record = attempts[question.id]
-  return !!record && record.attempts > 0 && record.correct < record.attempts
-}).length)
+const reviewedCount = computed(() => questions.filter((question) => attempts[question.id]?.attempts).length)
+const needsReviewTotal = computed(() => questions.filter((question) => needsReview(attempts[question.id])).length)
+const masteredTotal = computed(() => questions.filter((question) => isMastered(attempts[question.id])).length)
 
 function practiceTag(tag: string) {
   void router.push({ path: '/tools/takken', query: { tag } })
@@ -287,24 +274,25 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
         </template>
 
         <div class="takken-stats">
-          <div class="takken-stat"><strong>{{ totalMistakes }}</strong><span>累计错题总数</span></div>
-          <div class="takken-stat"><strong>{{ reviewAccuracy === null ? '--' : `${reviewAccuracy}%` }}</strong><span>复习正确率</span></div>
-          <div class="takken-stat"><strong>{{ stillWeakCount }}</strong><span>复习后仍薄弱</span></div>
+          <div class="takken-stat"><strong>{{ totalMistakes }}</strong><span>原始错题数量</span></div>
+          <div class="takken-stat"><strong>{{ reviewedCount }}</strong><span>已复习数量</span></div>
+          <div class="takken-stat"><strong>{{ needsReviewTotal }}</strong><span>仍需复习数量</span></div>
+          <div class="takken-stat"><strong>{{ masteredTotal }}</strong><span>已掌握数量</span></div>
         </div>
+        <p class="takken-hint">"原始错题"是你录入题库的每一题（本身都曾经做错过）；"已复习"是在本站至少重新做过一次；连续答对 2 次以上记为"已掌握"，只要再答错一次就会重新回到"仍需复习"。</p>
 
-        <h2 class="takken-section-title">按大科目看错题库（共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按错题数量从高到低）</h2>
-        <p class="takken-hint">错题来源就是你上传过的所有题目。每张卡片右下角的"错题密度"= 该科目错题数 ÷ 官方满分，用来参考这个科目按比例来看有多集中——但排序仍然按错题数量，不代表预计考分。</p>
+        <h2 class="takken-section-title">按大科目看错题库（考试参考共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按原始错题数量从高到低）</h2>
         <div class="takken-category-grid">
           <div v-for="stat in sortedCategoryStats" :key="stat.category" class="takken-category-card">
             <div class="takken-category-card-head">
               <span>{{ stat.category }}</span>
-              <span class="takken-category-card-count">{{ stat.total }} / {{ stat.weight ?? '?' }} 题</span>
+              <span class="takken-category-card-count">考试参考 {{ stat.weight ?? '—' }} 题</span>
             </div>
-            <div class="takken-progress-track"><i :style="{ width: `${Math.min(densityOf(stat) ?? 0, 100)}%` }" /></div>
-            <div class="takken-category-card-foot">
-              <span>{{ densityOf(stat) === null ? '暂无官方满分参照' : `错题密度 ${densityOf(stat)}%` }}</span>
-              <span v-if="accuracyOf(stat) !== null" :class="stat.weak > 0 ? 'takken-weak-badge' : 'takken-ok-badge'">复习正确率 {{ accuracyOf(stat) }}%</span>
-              <span v-else class="takken-muted-badge">还没回来复习</span>
+            <div class="takken-category-card-counts">
+              <span>原始错题 <strong>{{ stat.total }}</strong></span>
+              <span>已复习 <strong>{{ stat.reviewed }}</strong></span>
+              <span class="takken-weak-badge">仍需复习 <strong>{{ stat.needsReview }}</strong></span>
+              <span class="takken-ok-badge">已掌握 <strong>{{ stat.mastered }}</strong></span>
             </div>
           </div>
         </div>
@@ -328,23 +316,29 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
           </div>
         </details>
 
-        <h2 class="takken-section-title">薄弱分析表（按错题数量从高到低）</h2>
-        <div class="takken-table" style="--takken-table-cols: 5">
+        <h2 class="takken-section-title">薄弱分析表（按仍需复习数量从高到低）</h2>
+        <div class="takken-table" style="--takken-table-cols: 6">
           <div class="takken-table-row takken-table-row--head">
             <div class="takken-table-cell">科目</div>
             <div class="takken-table-cell">考点</div>
-            <div class="takken-table-cell">错题数</div>
-            <div class="takken-table-cell">复习情况</div>
+            <div class="takken-table-cell">原始错题</div>
+            <div class="takken-table-cell">仍需复习</div>
+            <div class="takken-table-cell">已掌握</div>
             <div class="takken-table-cell">操作</div>
           </div>
           <div v-for="stat in rankedTagStats" :key="stat.tag" class="takken-table-row">
             <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
             <div class="takken-table-cell"><span class="takken-table-cell-label">考点</span>{{ takkenTagLabel(stat.tag) }}</div>
-            <div class="takken-table-cell"><span class="takken-table-cell-label">错题数</span><strong class="takken-mistake-count">{{ stat.total }}</strong></div>
+            <div class="takken-table-cell"><span class="takken-table-cell-label">原始错题</span><strong class="takken-mistake-count">{{ stat.total }}</strong></div>
             <div class="takken-table-cell">
-              <span class="takken-table-cell-label">复习情况</span>
-              <span v-if="accuracyOf(stat) !== null" :class="stat.weak > 0 ? 'takken-weak-badge' : 'takken-ok-badge'">正确率 {{ accuracyOf(stat) }}%（{{ stat.correctSum }}/{{ stat.attemptsSum }}）</span>
-              <span v-else class="takken-muted-badge">还没复习</span>
+              <span class="takken-table-cell-label">仍需复习</span>
+              <span v-if="stat.needsReview > 0" class="takken-weak-badge">{{ stat.needsReview }}</span>
+              <span v-else class="takken-muted-badge">0</span>
+            </div>
+            <div class="takken-table-cell">
+              <span class="takken-table-cell-label">已掌握</span>
+              <span v-if="stat.mastered > 0" class="takken-ok-badge">{{ stat.mastered }}</span>
+              <span v-else class="takken-muted-badge">0</span>
             </div>
             <div class="takken-table-cell">
               <span class="takken-table-cell-label">操作</span>

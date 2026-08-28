@@ -1,22 +1,55 @@
+export interface TakkenQuestionOption {
+  id: string
+  text: string
+  explainZh?: string
+}
+
+/** Normalized shape used everywhere in the app. Always has stable per-option ids,
+ * regardless of whether the source JSON used the legacy `options: string[] / correct: number`
+ * shape or the new `options: {id,text}[] / correctOptionId` shape. See utils/takkenQuestionModel.ts. */
 export interface TakkenQuestion {
   id: string
+  category?: string
+  topicId?: string
   tag: string
   title: string
   stem: string
-  options: string[]
-  correct: number
+  options: TakkenQuestionOption[]
+  correctOptionId: string
   explain: string
   takeaway: string
+}
+
+export type TakkenAnswerResult = 'correct' | 'wrong'
+
+export interface TakkenAttemptHistoryEntry {
+  result: TakkenAnswerResult
+  at: string
 }
 
 export interface TakkenAttemptRecord {
   attempts: number
   correct: number
+  wrong: number
+  lastResult: TakkenAnswerResult | null
+  consecutiveCorrect: number
+  lastAnsweredAt: string | null
+  /** true once consecutiveCorrect reaches the mastery threshold; reset to false on the next wrong answer. */
+  mastered: boolean
+  /** spaced-repetition due date, recomputed after every answer (see utils/takkenStorage.ts). */
+  nextReviewAt: string | null
+  /** most recent answers only (capped), so storage does not grow without bound. */
+  history: TakkenAttemptHistoryEntry[]
 }
 
 export type TakkenAttemptMap = Record<string, TakkenAttemptRecord>
 
-export type TakkenPracticeMode = 'all' | 'wrong' | 'random'
+export interface TakkenAttemptsStorage {
+  version: number
+  records: TakkenAttemptMap
+}
+
+export type TakkenPracticeMode = 'all' | 'wrong' | 'random' | 'unpracticed' | 'favorites' | 'dueToday'
 
 export interface TakkenBilingualText {
   zh: string
