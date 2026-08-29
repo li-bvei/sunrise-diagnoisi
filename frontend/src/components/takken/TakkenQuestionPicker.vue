@@ -62,7 +62,7 @@ function pick(id: string) {
 </script>
 
 <template>
-  <el-drawer :model-value="modelValue" title="选择题目" size="min(480px, 100%)" @update:model-value="emit('update:modelValue', $event)">
+  <el-drawer class="takken-picker-drawer" :model-value="modelValue" title="选择题目" size="min(480px, 100%)" @update:model-value="emit('update:modelValue', $event)">
     <div class="takken-picker">
       <el-input v-model="keyword" placeholder="搜索题干、标签或题号" clearable :prefix-icon="Search" />
 
@@ -77,7 +77,7 @@ function pick(id: string) {
         </el-select>
       </div>
 
-      <div class="filter-pills takken-picker-status">
+      <div class="filter-pills takken-pills-wrap takken-picker-status">
         <button type="button" :class="{ active: statusFilter === 'all' }" @click="statusFilter = 'all'">全部</button>
         <button type="button" :class="{ active: statusFilter === 'unpracticed' }" @click="statusFilter = 'unpracticed'">未练习</button>
         <button type="button" :class="{ active: statusFilter === 'needsReview' }" @click="statusFilter = 'needsReview'">仍需复习</button>

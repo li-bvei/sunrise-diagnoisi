@@ -510,13 +510,32 @@ p, h1, h2, h3 { margin-top: 0; }
 .not-found h1 { margin: 18px 0 8px; font-size: 32px; }
 .not-found p { margin-bottom: 28px; color: var(--color-text-secondary); }
 
-.takken-page { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+.takken-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.takken-hero.page-hero { padding: 26px 0; }
+.takken-hero-inner { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
+.page-hero.takken-hero .takken-hero-text h1 { margin: 4px 0 0; font-size: clamp(22px, 3.2vw, 30px); }
+.takken-hero-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.takken-hero-status { color: var(--color-text-secondary); font-size: 12px; }
 .takken-shell { max-width: 720px; }
 .takken-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
 .takken-stat { padding: 16px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-card); text-align: center; }
 .takken-stat strong { display: block; font-size: 22px; color: var(--color-primary); }
 .takken-stat span { color: var(--color-text-secondary); font-size: 12px; }
 .takken-mode-bar { margin-bottom: 22px; }
+.takken-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }
+.takken-prev-result { margin-bottom: 16px; padding: 10px 14px; border: 1px dashed var(--color-border); border-radius: 10px; background: var(--color-page); color: var(--color-text-secondary); font-size: 12px; }
+.takken-prev-result summary { cursor: pointer; font-weight: 600; list-style: none; }
+.takken-prev-result summary::-webkit-details-marker { display: none; }
+.takken-prev-result p { margin: 8px 0 0; }
+.takken-option-flag { flex: 0 0 auto; align-self: center; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.takken-option-flag.correct { background: var(--color-success); color: white; }
+.takken-option-flag.wrong { background: var(--color-danger); color: white; }
+.takken-feedback-summary { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; color: var(--color-text-secondary); font-size: 13px; }
+.takken-feedback-summary strong { color: var(--color-text); }
+.takken-mapping-note { margin-top: 12px; padding: 10px 14px; border: 1px dashed var(--color-border); border-radius: 10px; color: var(--color-text-secondary); font-size: 12px; }
+.takken-mapping-note summary { cursor: pointer; font-weight: 600; list-style: none; }
+.takken-mapping-note summary::-webkit-details-marker { display: none; }
+.takken-mapping-note ul { margin: 8px 0 0; padding-left: 18px; }
 .takken-search { display: block; margin-bottom: 16px; }
 .takken-tag-filter { margin-bottom: 22px; }
 .takken-tag-filter-sub { margin-top: 10px; }
@@ -579,6 +598,7 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-empty h3 { margin: 4px 0 0; color: var(--color-text); font-size: 17px; }
 .takken-empty p { margin: 0; font-size: 13px; }
 .takken-card { padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-card); box-shadow: var(--shadow-card); }
+.takken-card:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
 .takken-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 14px; }
 .takken-tag { color: var(--color-primary); font-size: 12px; font-weight: 700; }
 .takken-title { color: var(--color-text-secondary); font-size: 12px; }
@@ -590,17 +610,16 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-option-mark { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-page); color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 12px; font-weight: 700; }
 .takken-option-body { display: block; }
 .takken-option-explain { display: block; margin-top: 4px; color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 11px; font-style: normal; line-height: 1.6; }
-.takken-favorite-toggle { flex: 0 0 auto; margin-left: auto; padding: 2px; border: 0; background: transparent; color: var(--color-warning); cursor: pointer; }
+.takken-favorite-toggle { flex: 0 0 auto; margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--color-warning); cursor: pointer; }
 .takken-retry { margin-top: 14px; }
 .takken-picker-trigger { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-card); color: var(--color-text); font-size: 13px; font-weight: 600; cursor: pointer; }
 .takken-picker-trigger:hover { border-color: #a9bdc8; }
 .takken-progress-label { margin: -18px 0 20px; color: var(--color-text-secondary); font-size: 12px; text-align: right; }
-.takken-feedback-note { margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--color-border); color: var(--color-text-secondary); font-family: var(--app-font-family); font-size: 12px; line-height: 1.7; }
 .takken-option.correct { border-color: #a9d3b8; background: #eef7f2; }
 .takken-option.correct .takken-option-mark { border-color: var(--color-success); background: var(--color-success); color: white; }
 .takken-option.wrong { border-color: #e0b3b3; background: #fbeeee; }
 .takken-option.wrong .takken-option-mark { border-color: var(--color-danger); background: var(--color-danger); color: white; }
-.takken-option.dim { opacity: .5; }
+.takken-option.dim { opacity: .72; }
 .takken-feedback { margin-top: 20px; padding: 18px; border-radius: 12px; }
 .takken-feedback.correct { border: 1px solid #cae2d6; background: #f1f8f4; }
 .takken-feedback.wrong { border: 1px solid #e6c6c6; background: #fbeeee; }
@@ -621,7 +640,8 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-takeaway .el-icon { flex: 0 0 auto; margin-top: 2px; }
 .takken-bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; border-top: 1px solid var(--color-border); background: rgba(255,255,255,.97); backdrop-filter: blur(10px); box-shadow: 0 -10px 26px rgba(32,58,72,.08); }
 .takken-bottom-nav-inner { display: flex; gap: 12px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
-.takken-bottom-nav .el-button { flex: 1; margin-left: 0; }
+.takken-bottom-nav .el-button { flex: 1; margin-left: 0; min-height: 48px; }
+.takken-picker-drawer .el-drawer__close-btn { width: 44px; height: 44px; }
 .takken-picker { display: grid; gap: 14px; }
 .takken-picker-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .takken-picker-row .el-select { width: 100%; }
@@ -881,6 +901,13 @@ p, h1, h2, h3 { margin-top: 0; }
   .filter-pills { flex-wrap: nowrap; width: calc(100vw - 28px); padding-bottom: 4px; overflow-x: auto; scrollbar-width: none; }
   .filter-pills::-webkit-scrollbar { display: none; }
   .filter-pills button { flex: 0 0 auto; }
+  /* Takken's practice-mode/subject/status pills must stay fully visible on mobile rather than
+     relying on an undiscoverable horizontal scroll — wrap them instead. */
+  .filter-pills.takken-pills-wrap { flex-wrap: wrap; width: auto; overflow-x: visible; padding-bottom: 0; }
+  .filter-pills.takken-pills-wrap button { flex: 0 1 auto; }
+  .takken-hero-inner { flex-direction: column; align-items: stretch; }
+  .takken-hero-actions { align-items: stretch; }
+  .takken-hero-actions .el-button { width: 100%; }
   .footer-grid { grid-template-columns: 1fr; gap: 36px; }
   .footer-brand { grid-column: auto; }
   .site-footer { padding-top: 48px; }

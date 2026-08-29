@@ -45,13 +45,13 @@ function selectTag(tag: string | null) {
 
 <template>
   <div class="takken-tag-filter">
-    <div class="filter-pills">
+    <div class="filter-pills takken-pills-wrap">
       <button type="button" :class="{ active: category === null }" @click="selectCategory(null)">全部类型</button>
       <button v-for="item in availableCategories" :key="item" type="button" :class="{ active: category === item }" @click="selectCategory(item)">
         {{ item }}（{{ categoryCounts.get(item) }}）
       </button>
     </div>
-    <div v-if="category" class="filter-pills takken-tag-filter-sub">
+    <div v-if="category" class="filter-pills takken-tag-filter-sub takken-pills-wrap">
       <button type="button" :class="{ active: tag === null }" @click="selectTag(null)">全部（{{ categoryCounts.get(category) }}）</button>
       <button v-for="item in tagsInCategory" :key="item" type="button" :class="{ active: tag === item }" @click="selectTag(item)">
         {{ takkenTagLabel(item) }}（{{ tagCounts.get(item) }}）

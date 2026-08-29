@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheck, CircleClose, List, Star, StarFilled } from '@element-plus/icons-vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
@@ -81,15 +81,26 @@ const mode = ref<TakkenPracticeMode>('all')
 const orderIds = ref<string[]>(buildOrder('all'))
 const currentIndex = ref(0)
 
+/** Entering a new practice run (mode switch or filter change) should always present its questions
+ * as freshly answerable — a question can be in the "只练错题" queue precisely because it was already
+ * answered (wrongly) in a previous run, so leaving old session answers in place would show it as
+ * disabled with stale feedback instead of ready to retry. The permanent attempts/mastery history in
+ * `attempts` is untouched; only the current-visit answered/disabled state is cleared. */
+function clearSessionAnswers() {
+  for (const key of Object.keys(sessionAnswers)) delete sessionAnswers[key]
+}
+
 function setMode(target: TakkenPracticeMode) {
   mode.value = target
   orderIds.value = buildOrder(target)
   currentIndex.value = 0
+  clearSessionAnswers()
 }
 
 watch([selectedCategory, selectedTag], () => {
   orderIds.value = buildOrder(mode.value)
   currentIndex.value = 0
+  clearSessionAnswers()
 })
 
 const orderedQuestions = computed<TakkenQuestion[]>(() => {
@@ -132,16 +143,21 @@ const displayOptions = computed(() => {
   return shuffledOptionIds.value.map((id) => byId.get(id)).filter((option): option is NonNullable<typeof option> => !!option)
 })
 
-// Legacy questions don't have per-option explainZh yet — for those we fall back to a small
-// "this is original option N" annotation so the shared `explain` prose (which is written in the
-// question's *original* option order) can still be matched to whichever letter it ended up as
-// after shuffling. Once a question is authored with real per-option explanations this is unused.
+// Legacy questions don't have per-option explainZh yet — for those the shared `explain` prose is
+// written in the question's *original* option order, which no longer matches the shuffled A/B/C/D
+// letters. We keep a mapping (letter -> original option number) so it can be looked up, but it is
+// internal bookkeeping, not something to print under every option — see `optionMapping` below,
+// surfaced only inside a collapsed detail in the feedback panel.
 const hasPerOptionExplain = computed(() => !!currentQuestion.value?.options.some((option) => option.explainZh))
 function originalPosition(optionId: string): number {
   const question = currentQuestion.value
   if (!question) return 0
   return question.options.findIndex((option) => option.id === optionId) + 1
 }
+const optionMapping = computed(() => displayOptions.value.map((option, index) => ({
+  letter: String.fromCharCode(65 + index),
+  original: originalPosition(option.id),
+})))
 
 const sessionAnswers = reactive<Record<string, string>>({})
 const selectedOptionId = computed<string | undefined>(() => {
@@ -153,6 +169,24 @@ const isCorrect = computed(() => {
   const question = currentQuestion.value
   if (!question || selectedOptionId.value === undefined) return false
   return selectedOptionId.value === question.correctOptionId
+})
+function letterForOptionId(optionId: string | undefined): string | null {
+  if (!optionId) return null
+  const index = displayOptions.value.findIndex((option) => option.id === optionId)
+  return index >= 0 ? String.fromCharCode(65 + index) : null
+}
+const selectedLetter = computed(() => letterForOptionId(selectedOptionId.value))
+const correctLetter = computed(() => letterForOptionId(currentQuestion.value?.correctOptionId))
+
+/** Shown as a collapsed, secondary line above the stem when a question already has practice
+ * history but hasn't been (re)answered in the current run yet — keeps the history visible without
+ * blocking the options or forcing a scroll to a "再练一次" button buried in the old feedback. */
+const previousAttemptSummary = computed(() => {
+  const question = currentQuestion.value
+  if (!question || hasAnswered.value) return null
+  const record = attempts[question.id]
+  if (!record || record.attempts === 0) return null
+  return record
 })
 
 const comboStreak = ref(0)
@@ -213,11 +247,35 @@ function optionState(optionId: string): string {
   return 'dim'
 }
 
+const isLastQuestion = computed(() => currentIndex.value >= orderedQuestions.value.length - 1)
+const nextButtonLabel = computed(() => {
+  if (isLastQuestion.value) return '已是最后一题'
+  return hasAnswered.value ? '下一题' : '跳过'
+})
+
+// Every question-switching action (prev/next/picker/hero CTA) must land the user on the new
+// question's title, not wherever the page happened to be scrolled to — otherwise "下一题" from the
+// bottom bar drops straight into the footer on mobile. Scroll first, then move focus without
+// re-triggering a second scroll, and let the aria-live progress label announce the change.
+const cardRef = ref<HTMLElement | null>(null)
+function focusCard() {
+  nextTick(() => {
+    cardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    cardRef.value?.focus({ preventScroll: true })
+  })
+}
+
 function goPrev() {
-  if (currentIndex.value > 0) currentIndex.value -= 1
+  if (currentIndex.value > 0) {
+    currentIndex.value -= 1
+    focusCard()
+  }
 }
 function goNext() {
-  if (currentIndex.value < orderedQuestions.value.length - 1) currentIndex.value += 1
+  if (currentIndex.value < orderedQuestions.value.length - 1) {
+    currentIndex.value += 1
+    focusCard()
+  }
 }
 
 const pickerVisible = ref(false)
@@ -227,16 +285,33 @@ function selectFromPicker(questionId: string) {
   orderIds.value = pool.map((question) => question.id)
   const index = orderIds.value.indexOf(questionId)
   currentIndex.value = index >= 0 ? index : 0
+  focusCard()
+}
+
+const dueTodayCount = computed(() => questions.filter((question) => isDueToday(attempts[question.id])).length)
+const heroCtaLabel = computed(() => {
+  if (dueTodayCount.value > 0) return `先复习今日到期题（${dueTodayCount.value}）`
+  if (totalAttempts.value === 0) return '开始刷题'
+  return '继续刷题'
+})
+function heroCtaAction() {
+  if (dueTodayCount.value > 0 && mode.value !== 'dueToday') setMode('dueToday')
+  focusCard()
 }
 </script>
 
 <template>
   <div class="page-surface takken-page">
-    <section class="page-hero compact">
-      <div class="container">
-        <span class="eyebrow">宅建考试刷题</span>
-        <h1>宅地建物取引士 过去问练习</h1>
-        <p>逐题练习历年真题，作答历史会自动保存在本设备上，方便持续巩固薄弱题目。</p>
+    <section class="page-hero compact takken-hero">
+      <div class="container takken-hero-inner">
+        <div class="takken-hero-text">
+          <span class="eyebrow">宅建考试刷题</span>
+          <h1>宅地建物取引士 过去问练习</h1>
+        </div>
+        <div class="takken-hero-actions">
+          <el-button type="primary" size="large" @click="heroCtaAction">{{ heroCtaLabel }}</el-button>
+          <span v-if="totalAttempts > 0" class="takken-hero-status">仍需复习 {{ needsReviewCount }} · 已掌握 {{ masteredCount }}</span>
+        </div>
       </div>
     </section>
 
@@ -260,27 +335,32 @@ function selectFromPicker(questionId: string) {
         />
 
         <div class="filter-bar takken-mode-bar">
-          <div class="filter-pills">
+          <div class="filter-pills takken-pills-wrap">
             <button type="button" :class="{ active: mode === 'all' }" @click="setMode('all')">全部题目</button>
             <button type="button" :class="{ active: mode === 'wrong' }" @click="setMode('wrong')">只练错题</button>
-            <button type="button" :class="{ active: mode === 'random' }" @click="setMode('random')">随机顺序</button>
+            <button type="button" :class="{ active: mode === 'dueToday' }" @click="setMode('dueToday')">今日到期复习</button>
             <button type="button" :class="{ active: mode === 'unpracticed' }" @click="setMode('unpracticed')">未练习题</button>
             <button type="button" :class="{ active: mode === 'favorites' }" @click="setMode('favorites')">已收藏题</button>
-            <button type="button" :class="{ active: mode === 'dueToday' }" @click="setMode('dueToday')">今日到期复习</button>
+            <button type="button" :class="{ active: mode === 'random' }" @click="setMode('random')">随机顺序</button>
           </div>
           <button type="button" class="takken-picker-trigger" @click="pickerVisible = true"><el-icon><List /></el-icon>选题</button>
         </div>
-        <p v-if="progressLabel" class="takken-progress-label">{{ progressLabel }}</p>
+        <p v-if="progressLabel" class="takken-progress-label" role="status" aria-live="polite">{{ progressLabel }}</p>
 
         <div v-if="!currentQuestion" class="takken-empty">
           <el-icon :size="34"><CircleCheck /></el-icon>
           <h3>{{ filteredQuestions.length === 0 ? '这个分类下还没有题目' : '这个范围内暂时没有题目' }}</h3>
-          <p v-if="filteredQuestions.length > 0">切换到"全部题目"或"选题"里挑一道，答错/未练习的题目会自动出现在对应筛选里。</p>
+          <p v-if="filteredQuestions.length > 0">切换到其他筛选条件，或直接选一个新的练习范围：</p>
           <p v-else>试试切换到其他分类，或选择"全部类型"。</p>
+          <div v-if="filteredQuestions.length > 0" class="takken-empty-actions">
+            <el-button size="default" @click="setMode('unpracticed')">去做未练习题</el-button>
+            <el-button size="default" @click="pickerVisible = true">去选题</el-button>
+            <el-button size="default" @click="setMode('all')">查看全部题目</el-button>
+          </div>
         </div>
 
         <template v-else>
-          <div class="takken-card">
+          <div ref="cardRef" class="takken-card" tabindex="-1">
             <div class="takken-card-head">
               <span class="takken-tag">{{ currentQuestion.tag }}</span>
               <span class="takken-title">{{ currentQuestion.title }}</span>
@@ -288,6 +368,10 @@ function selectFromPicker(questionId: string) {
                 <el-icon :size="18"><StarFilled v-if="favorites.has(currentQuestion.id)" /><Star v-else /></el-icon>
               </button>
             </div>
+            <details v-if="previousAttemptSummary" class="takken-prev-result">
+              <summary>上次作答：{{ previousAttemptSummary.lastResult === 'correct' ? '答对' : '答错' }} · 已练习 {{ previousAttemptSummary.attempts }} 次</summary>
+              <p>本题当前状态为"仍需复习"，可以直接重新作答，不会影响之前的记录。</p>
+            </details>
             <p class="takken-stem">{{ currentQuestion.stem }}</p>
             <div class="takken-options">
               <button
@@ -303,19 +387,29 @@ function selectFromPicker(questionId: string) {
                 <span class="takken-option-body">
                   {{ option.text }}
                   <em v-if="hasAnswered && option.explainZh" class="takken-option-explain">{{ option.explainZh }}</em>
-                  <em v-else-if="hasAnswered && !hasPerOptionExplain" class="takken-option-explain">解析原文中的"选项{{ originalPosition(option.id) }}"</em>
                 </span>
+                <span v-if="hasAnswered && option.id === currentQuestion.correctOptionId" class="takken-option-flag correct">正确答案</span>
+                <span v-else-if="hasAnswered && option.id === selectedOptionId" class="takken-option-flag wrong">你的选择</span>
               </button>
             </div>
 
-            <div v-if="hasAnswered" class="takken-feedback" :class="isCorrect ? 'correct' : 'wrong'">
-              <p v-if="!hasPerOptionExplain" class="takken-feedback-note">下方解析按原题顺序讲解，每个选项上已标出对应"选项几"，方便和乱序后的 A/B/C/D 对照。</p>
+            <div v-if="hasAnswered" class="takken-feedback" :class="isCorrect ? 'correct' : 'wrong'" aria-live="polite">
               <div class="takken-feedback-title" :class="isCorrect ? 'correct' : 'wrong'">
                 <el-icon><CircleCheck v-if="isCorrect" /><CircleClose v-else /></el-icon>
                 {{ isCorrect ? '答对了' : '答错了' }}
               </div>
+              <div class="takken-feedback-summary">
+                <span>你的答案：<strong>{{ selectedLetter }}</strong></span>
+                <span v-if="!isCorrect">正确答案：<strong>{{ correctLetter }}</strong></span>
+              </div>
               <p class="takken-explain">{{ currentQuestion.explain }}</p>
               <div class="takken-takeaway"><el-icon><Star /></el-icon><span>{{ currentQuestion.takeaway }}</span></div>
+              <details v-if="!hasPerOptionExplain" class="takken-mapping-note">
+                <summary>解析对照表（原题选项顺序）</summary>
+                <ul>
+                  <li v-for="entry in optionMapping" :key="entry.letter">{{ entry.letter }} = 解析原文中的"选项{{ entry.original }}"</li>
+                </ul>
+              </details>
               <button type="button" class="text-link takken-retry" @click="retryCurrentQuestion">再练一次</button>
             </div>
           </div>
@@ -326,7 +420,7 @@ function selectFromPicker(questionId: string) {
     <div v-if="orderedQuestions.length > 0" class="takken-bottom-nav">
       <div class="container takken-bottom-nav-inner">
         <el-button size="large" :disabled="currentIndex === 0" @click="goPrev">上一题</el-button>
-        <el-button type="primary" size="large" :disabled="currentIndex >= orderedQuestions.length - 1" @click="goNext">下一题</el-button>
+        <el-button :type="hasAnswered ? 'primary' : 'default'" size="large" :disabled="isLastQuestion" @click="goNext">{{ nextButtonLabel }}</el-button>
       </div>
     </div>
 
