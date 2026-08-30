@@ -4,9 +4,9 @@ import { useRouter } from 'vue-router'
 import { ArrowRight, Delete, UploadFilled } from '@element-plus/icons-vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
 import { TAKKEN_QUESTIONS } from '@/utils/takkenQuestionModel'
-import type { TakkenAttemptMap, TakkenUploadPayload } from '@/types/takken'
-import { clearTakkenUpload, isMastered, loadTakkenAttempts, loadTakkenExamDate, loadTakkenUpload, needsReview, saveTakkenExamDate, saveTakkenUpload } from '@/utils/takkenStorage'
-import { classifyCsvCategory, classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, TAKKEN_EXAM_TOTAL_QUESTIONS, type TakkenCategory } from '@/utils/takkenCategories'
+import type { TakkenAttemptMap, TakkenPracticeMode, TakkenUploadPayload } from '@/types/takken'
+import { clearTakkenUpload, isMastered, isUnpracticed, loadTakkenAttempts, loadTakkenExamDate, loadTakkenUpload, needsReview, saveTakkenExamDate, saveTakkenUpload } from '@/utils/takkenStorage'
+import { classifyCsvCategory, classifyTakkenTag, takkenTagLabel, TAKKEN_CATEGORY_ORDER, TAKKEN_CATEGORY_WEIGHTS, type TakkenCategory } from '@/utils/takkenCategories'
 import { TakkenCsvParseError, parseTakkenCsvFile } from '@/utils/takkenCsvImport'
 import { TAKKEN_SYLLABUS } from '@/data/takkenSyllabus'
 
@@ -162,12 +162,59 @@ const rankedTagStats = computed(() => [...tagStats.value].sort((a, b) => {
 }))
 
 const totalMistakes = computed(() => questions.length)
-const reviewedCount = computed(() => questions.filter((question) => attempts[question.id]?.attempts).length)
 const needsReviewTotal = computed(() => questions.filter((question) => needsReview(attempts[question.id])).length)
-const masteredTotal = computed(() => questions.filter((question) => isMastered(attempts[question.id])).length)
 
-function practiceTag(tag: string) {
-  void router.push({ path: '/tools/takken', query: { tag } })
+/** The whole page exists to answer one question: "我现在该练什么？" — so every category with at
+ * least one recorded mistake is ranked by how much of it is still unmastered, and the #1 entry
+ * drives the big priority card up top. Categories with zero recorded mistakes (nothing uploaded
+ * for that subject yet) are left out of the ranking entirely — there is nothing to recommend. */
+const rankedCategoryStats = computed(() => [...categoryStats.value]
+  .filter((stat) => stat.total > 0)
+  .sort((a, b) => {
+    if (b.needsReview !== a.needsReview) return b.needsReview - a.needsReview
+    // Tie-break on "not yet mastered" (needs-review + never-touched combined) so a subject that
+    // hasn't been started at all still outranks one that is already fully mastered — there is
+    // nothing to recommend in a finished subject.
+    const aRemaining = a.total - a.mastered
+    const bRemaining = b.total - b.mastered
+    if (bRemaining !== aRemaining) return bRemaining - aRemaining
+    return b.total - a.total
+  }))
+const priorityCategory = computed(() => rankedCategoryStats.value[0] ?? null)
+const otherCategoryStats = computed(() => rankedCategoryStats.value.slice(1))
+/** A category's headline message depends on which of three states it's actually in — these are
+ * NOT interchangeable: needsReview===0 can mean "fully mastered" OR "never touched at all", and
+ * conflating them would tell a brand-new user they've already finished a subject they haven't
+ * started. */
+interface ReviewCounts { needsReview: number; mastered: number; total: number }
+function progressKind(stat: ReviewCounts): 'needsReview' | 'unpracticed' | 'mastered' {
+  if (stat.needsReview > 0) return 'needsReview'
+  if (stat.mastered < stat.total) return 'unpracticed'
+  return 'mastered'
+}
+/** "去练习" must never link into an empty queue — a category/tag with nothing left in "仍需复习"
+ * either has untouched questions (send them to 未练习题) or is fully mastered (send them to 随机
+ * 顺序 for light review), never blindly to 只练错题. */
+function practiceModeFor(stat: ReviewCounts): TakkenPracticeMode {
+  const kind = progressKind(stat)
+  if (kind === 'needsReview') return 'wrong'
+  if (kind === 'unpracticed') return 'unpracticed'
+  return 'random'
+}
+const priorityKind = computed(() => priorityCategory.value ? progressKind(priorityCategory.value) : null)
+// "全部复习完了" 只有在真的复习过、且没有遗留问题时才成立——一道题都没做过（unpracticed）
+// 也会让 needsReviewTotal 变成 0，绝不能把"还没开始"误报成"已经全部搞定"。
+const unpracticedTotal = computed(() => questions.filter((question) => isUnpracticed(attempts[question.id])).length)
+const allCaughtUp = computed(() => totalMistakes.value > 0 && needsReviewTotal.value === 0 && unpracticedTotal.value === 0)
+
+function practiceCategory(stat: CategoryStat) {
+  void router.push({ path: '/tools/takken', query: { category: stat.category, mode: practiceModeFor(stat) } })
+}
+function practiceTag(stat: TagStat) {
+  void router.push({ path: '/tools/takken', query: { tag: stat.tag, mode: practiceModeFor(stat) } })
+}
+function practiceRandom() {
+  void router.push({ path: '/tools/takken', query: { mode: 'random' } })
 }
 
 interface SyllabusMatch { label: string; matched: boolean; matchedTags: string[]; errorCount: number }
@@ -202,7 +249,7 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
       <div class="container">
         <span class="eyebrow">宅建考试刷题</span>
         <h1>薄弱分析</h1>
-        <p>上传外部刷题网站导出的真实练习记录，按正确率找出薄弱科目和考点；下方还保留了本站错题库自己的统计，两份数据分开展示。</p>
+        <p>题库里的每一题都是你答错过的题——这里不是给你看一堆数字，而是直接告诉你现在最该先练哪一科。</p>
       </div>
     </section>
 
@@ -219,133 +266,160 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
           <el-date-picker v-model="examDateModel" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" placeholder="选择宅建考试日期" />
         </div>
 
-        <h2 class="takken-section-title">上传练习记录（CSV）</h2>
-        <p class="takken-hint">支持 takken-siken.com 等刷题网站导出的记录（需要包含"学習日/出典/正誤/分野/細目"这些列），自动识别 Shift-JIS 编码。数据只存在本机浏览器里，不会上传到服务器；重新选择文件会覆盖上一次的记录。</p>
-        <div class="takken-upload">
-          <input ref="fileInput" type="file" accept=".csv,text/csv" class="takken-upload-input-hidden" @change="handleFileChange">
-          <el-button size="large" :loading="uploading" @click="pickFile"><el-icon><UploadFilled /></el-icon>{{ uploadPayload ? '重新上传 CSV' : '选择 CSV 文件' }}</el-button>
-          <div v-if="uploadPayload" class="takken-upload-meta">
-            <span>已加载 <strong>{{ uploadPayload.fileName }}</strong> · {{ uploadPayload.records.length }} 条记录</span>
-            <button type="button" class="text-link" @click="removeUpload"><el-icon><Delete /></el-icon>清除</button>
-          </div>
-          <p v-if="uploadError" class="takken-upload-error">{{ uploadError }}</p>
+        <!-- 整个页面最重要的一块：直接给结论，不需要用户自己去比较数字。 -->
+        <div v-if="!priorityCategory" class="takken-priority-card empty">
+          <h2>还没有可分析的错题</h2>
+          <p>题库里暂时没有记录，去刷题页练几道之后再回来看分析。</p>
+          <el-button type="primary" size="large" @click="practiceRandom">去刷题</el-button>
+        </div>
+        <div v-else-if="allCaughtUp" class="takken-priority-card done">
+          <h2>🎉 错题库里的题目都已经复习完了</h2>
+          <p>{{ totalMistakes }} 道历史错题全部达到"已掌握"。可以试试随机模式巩固一下，或者去考点速查复习一遍。</p>
+          <el-button type="primary" size="large" @click="practiceRandom">随机复习一轮</el-button>
+        </div>
+        <div v-else class="takken-priority-card">
+          <span class="takken-priority-eyebrow">现在最该优先复习</span>
+          <h2>{{ priorityCategory.category }}</h2>
+          <p v-if="priorityKind === 'needsReview'">
+            还有 <strong>{{ priorityCategory.needsReview }}</strong> 题没掌握
+            <template v-if="priorityCategory.weight">（官方考试这科占 {{ priorityCategory.weight }} 题）</template>
+            ，已经掌握 {{ priorityCategory.mastered }} / {{ priorityCategory.total }} 题。
+          </p>
+          <p v-else-if="priorityKind === 'unpracticed'">
+            这一科还有 <strong>{{ priorityCategory.total - priorityCategory.mastered }}</strong> 题没在这里练过
+            <template v-if="priorityCategory.weight">（官方考试这科占 {{ priorityCategory.weight }} 题）</template>
+            ，先从这一科开始。
+          </p>
+          <p v-else>这一科的错题已经全部掌握，可以练点别的，或者随机复习巩固一下。</p>
+          <div class="takken-priority-bar"><i :style="{ width: `${(priorityCategory.mastered / priorityCategory.total) * 100}%` }" /></div>
+          <el-button type="primary" size="large" @click="practiceCategory(priorityCategory)">去练习这一科<el-icon class="el-icon--right"><ArrowRight /></el-icon></el-button>
         </div>
 
-        <template v-if="uploadPayload && csvOverall">
-          <div class="takken-stats">
-            <div class="takken-stat"><strong>{{ csvOverall.total }}</strong><span>CSV 练习总题数</span></div>
-            <div class="takken-stat"><strong>{{ csvAccuracy(csvOverall) }}%</strong><span>真实正确率</span></div>
-            <div class="takken-stat"><strong>{{ csvOverall.total - csvOverall.correct }}</strong><span>CSV 中的错题数</span></div>
-          </div>
-
-          <h2 class="takken-section-title">按大科目看真实正确率（按正确率从低到高）</h2>
-          <p class="takken-hint">数据来自你上传的 CSV，涵盖了做对和做错的完整记录，比只看错题库更能反映真实水平。</p>
-          <div class="takken-category-grid">
-            <div v-for="stat in csvCategoryStats" :key="stat.category" class="takken-category-card">
-              <div class="takken-category-card-head">
-                <span>{{ stat.category }}</span>
-                <span class="takken-category-card-count">{{ stat.correct }} / {{ stat.total }} 题</span>
+        <template v-if="otherCategoryStats.length > 0">
+          <h2 class="takken-section-title">其他科目</h2>
+          <div class="takken-priority-list">
+            <div v-for="stat in otherCategoryStats" :key="stat.category" class="takken-priority-row">
+              <div class="takken-priority-row-main">
+                <span class="takken-priority-row-name">{{ stat.category }}</span>
+                <span class="takken-priority-row-detail">
+                  <span v-if="stat.needsReview > 0" class="takken-weak-badge">仍需复习 {{ stat.needsReview }}</span>
+                  <span v-else-if="stat.mastered < stat.total" class="takken-muted-badge">还没开始复习</span>
+                  <span v-else class="takken-ok-badge">已全部掌握</span>
+                  <span class="takken-priority-row-total">共 {{ stat.total }} 题错题</span>
+                </span>
               </div>
-              <div class="takken-progress-track"><i :class="{ warn: csvAccuracy(stat) < 60 }" :style="{ width: `${csvAccuracy(stat)}%` }" /></div>
-              <div class="takken-category-card-foot">
-                <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">正确率 {{ csvAccuracy(stat) }}%</span>
-              </div>
-            </div>
-          </div>
-
-          <h2 class="takken-section-title">按细目看真实正确率（按正确率从低到高）</h2>
-          <div class="takken-table" style="--takken-table-cols: 4">
-            <div class="takken-table-row takken-table-row--head">
-              <div class="takken-table-cell">科目</div>
-              <div class="takken-table-cell">细目</div>
-              <div class="takken-table-cell">练习数</div>
-              <div class="takken-table-cell">正确率</div>
-            </div>
-            <div v-for="stat in csvSubStats" :key="`${stat.category}-${stat.subItem}`" class="takken-table-row">
-              <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
-              <div class="takken-table-cell"><span class="takken-table-cell-label">细目</span>{{ stat.subItem }}</div>
-              <div class="takken-table-cell"><span class="takken-table-cell-label">练习数</span>{{ stat.correct }} / {{ stat.total }}</div>
-              <div class="takken-table-cell">
-                <span class="takken-table-cell-label">正确率</span>
-                <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">{{ csvAccuracy(stat) }}%</span>
-              </div>
+              <button type="button" class="text-link" @click="practiceCategory(stat)">去练习<el-icon><ArrowRight /></el-icon></button>
             </div>
           </div>
         </template>
 
-        <div class="takken-stats">
-          <div class="takken-stat"><strong>{{ totalMistakes }}</strong><span>原始错题数量</span></div>
-          <div class="takken-stat"><strong>{{ reviewedCount }}</strong><span>已复习数量</span></div>
-          <div class="takken-stat"><strong>{{ needsReviewTotal }}</strong><span>仍需复习数量</span></div>
-          <div class="takken-stat"><strong>{{ masteredTotal }}</strong><span>已掌握数量</span></div>
-        </div>
-        <p class="takken-hint">"原始错题"是你录入题库的每一题（本身都曾经做错过）；"已复习"是在本站至少重新做过一次；连续答对 2 次以上记为"已掌握"，只要再答错一次就会重新回到"仍需复习"。</p>
-
-        <h2 class="takken-section-title">按大科目看错题库（考试参考共 {{ TAKKEN_EXAM_TOTAL_QUESTIONS }} 题，按原始错题数量从高到低）</h2>
-        <div class="takken-category-grid">
-          <div v-for="stat in sortedCategoryStats" :key="stat.category" class="takken-category-card">
-            <div class="takken-category-card-head">
-              <span>{{ stat.category }}</span>
-              <span class="takken-category-card-count">考试参考 {{ stat.weight ?? '—' }} 题</span>
-            </div>
-            <div class="takken-category-card-counts">
-              <span>原始错题 <strong>{{ stat.total }}</strong></span>
-              <span>已复习 <strong>{{ stat.reviewed }}</strong></span>
-              <span class="takken-weak-badge">仍需复习 <strong>{{ stat.needsReview }}</strong></span>
-              <span class="takken-ok-badge">已掌握 <strong>{{ stat.mastered }}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        <h2 class="takken-section-title">考点覆盖情况（参考主流教材目录，非官方数据）</h2>
-        <p class="takken-hint">每个科目常见知识点的参考清单，按错题数从高到低排列。灰色条代表"还没有相关错题"——可能是已经掌握，也可能是还没考到过，需要你自己判断，不是数值越高越差的绝对指标。</p>
-        <details v-for="entry in coverageByCategory" :key="entry.category" class="takken-toc takken-coverage">
-          <summary>
-            <span>{{ entry.category }}</span>
-            <span class="takken-coverage-ratio">{{ entry.matchedCount }} / {{ entry.total }} 个考点已出现错题</span>
-          </summary>
-          <div class="takken-heat-list">
-            <div v-for="item in entry.items" :key="item.label" class="takken-heat-row" :class="{ zero: item.errorCount === 0 }">
-              <div class="takken-heat-label">
-                <span>{{ item.label }}</span>
-                <span v-if="item.matchedTags.length" class="takken-heat-source">{{ item.matchedTags.join('、') }}</span>
+        <details class="takken-toc">
+          <summary><span>细分考点排行</span><span class="takken-coverage-ratio">按仍需复习数量从高到低</span></summary>
+          <div class="takken-toc-body">
+            <div class="takken-table" style="--takken-table-cols: 3">
+              <div class="takken-table-row takken-table-row--head">
+                <div class="takken-table-cell">考点</div>
+                <div class="takken-table-cell">仍需复习</div>
+                <div class="takken-table-cell">操作</div>
               </div>
-              <div class="takken-heat-bar-track"><div class="takken-heat-bar" :style="{ width: `${(item.errorCount / entry.maxError) * 100}%` }" /></div>
-              <div class="takken-heat-count">{{ item.errorCount }} 题</div>
+              <div v-for="stat in rankedTagStats" :key="stat.tag" class="takken-table-row">
+                <div class="takken-table-cell">
+                  <span class="takken-table-cell-label">考点</span>
+                  {{ takkenTagLabel(stat.tag) }}
+                  <span class="takken-priority-row-total">（{{ stat.category }} · 共 {{ stat.total }} 题）</span>
+                </div>
+                <div class="takken-table-cell">
+                  <span class="takken-table-cell-label">仍需复习</span>
+                  <span v-if="stat.needsReview > 0" class="takken-weak-badge">{{ stat.needsReview }}</span>
+                  <span v-else-if="stat.mastered < stat.total" class="takken-muted-badge">还没开始</span>
+                  <span v-else class="takken-ok-badge">已掌握</span>
+                </div>
+                <div class="takken-table-cell">
+                  <span class="takken-table-cell-label">操作</span>
+                  <button type="button" class="text-link" @click="practiceTag(stat)">去练习<el-icon><ArrowRight /></el-icon></button>
+                </div>
+              </div>
             </div>
           </div>
         </details>
 
-        <h2 class="takken-section-title">薄弱分析表（按仍需复习数量从高到低）</h2>
-        <div class="takken-table" style="--takken-table-cols: 6">
-          <div class="takken-table-row takken-table-row--head">
-            <div class="takken-table-cell">科目</div>
-            <div class="takken-table-cell">考点</div>
-            <div class="takken-table-cell">原始错题</div>
-            <div class="takken-table-cell">仍需复习</div>
-            <div class="takken-table-cell">已掌握</div>
-            <div class="takken-table-cell">操作</div>
+        <details class="takken-toc" :open="!!uploadPayload">
+          <summary><span>导入外部正确率数据（可选）</span><span class="takken-coverage-ratio">{{ uploadPayload ? `已导入 ${uploadPayload.records.length} 条` : '未导入' }}</span></summary>
+          <div class="takken-toc-body">
+            <p class="takken-hint">支持 takken-siken.com 等刷题网站导出的记录（需要包含"学習日/出典/正誤/分野/細目"这些列），自动识别 Shift-JIS 编码。数据只存在本机浏览器里，不会上传到服务器；重新选择文件会覆盖上一次的记录。这份数据既有做对也有做错，能反映比错题库更真实的正确率。</p>
+            <div class="takken-upload">
+              <input ref="fileInput" type="file" accept=".csv,text/csv" class="takken-upload-input-hidden" @change="handleFileChange">
+              <el-button size="large" :loading="uploading" @click="pickFile"><el-icon><UploadFilled /></el-icon>{{ uploadPayload ? '重新上传 CSV' : '选择 CSV 文件' }}</el-button>
+              <div v-if="uploadPayload" class="takken-upload-meta">
+                <span>已加载 <strong>{{ uploadPayload.fileName }}</strong> · {{ uploadPayload.records.length }} 条记录</span>
+                <button type="button" class="text-link" @click="removeUpload"><el-icon><Delete /></el-icon>清除</button>
+              </div>
+              <p v-if="uploadError" class="takken-upload-error">{{ uploadError }}</p>
+            </div>
+
+            <template v-if="uploadPayload && csvOverall">
+              <div class="takken-stats">
+                <div class="takken-stat"><strong>{{ csvOverall.total }}</strong><span>CSV 练习总题数</span></div>
+                <div class="takken-stat"><strong>{{ csvAccuracy(csvOverall) }}%</strong><span>真实正确率</span></div>
+                <div class="takken-stat"><strong>{{ csvOverall.total - csvOverall.correct }}</strong><span>CSV 中的错题数</span></div>
+              </div>
+
+              <h3>按大科目看真实正确率（按正确率从低到高）</h3>
+              <div class="takken-category-grid">
+                <div v-for="stat in csvCategoryStats" :key="stat.category" class="takken-category-card">
+                  <div class="takken-category-card-head">
+                    <span>{{ stat.category }}</span>
+                    <span class="takken-category-card-count">{{ stat.correct }} / {{ stat.total }} 题</span>
+                  </div>
+                  <div class="takken-progress-track"><i :class="{ warn: csvAccuracy(stat) < 60 }" :style="{ width: `${csvAccuracy(stat)}%` }" /></div>
+                  <div class="takken-category-card-foot">
+                    <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">正确率 {{ csvAccuracy(stat) }}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <h3>按细目看真实正确率（按正确率从低到高）</h3>
+              <div class="takken-table" style="--takken-table-cols: 4">
+                <div class="takken-table-row takken-table-row--head">
+                  <div class="takken-table-cell">科目</div>
+                  <div class="takken-table-cell">细目</div>
+                  <div class="takken-table-cell">练习数</div>
+                  <div class="takken-table-cell">正确率</div>
+                </div>
+                <div v-for="stat in csvSubStats" :key="`${stat.category}-${stat.subItem}`" class="takken-table-row">
+                  <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
+                  <div class="takken-table-cell"><span class="takken-table-cell-label">细目</span>{{ stat.subItem }}</div>
+                  <div class="takken-table-cell"><span class="takken-table-cell-label">练习数</span>{{ stat.correct }} / {{ stat.total }}</div>
+                  <div class="takken-table-cell">
+                    <span class="takken-table-cell-label">正确率</span>
+                    <span :class="csvAccuracy(stat) < 60 ? 'takken-weak-badge' : 'takken-ok-badge'">{{ csvAccuracy(stat) }}%</span>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
-          <div v-for="stat in rankedTagStats" :key="stat.tag" class="takken-table-row">
-            <div class="takken-table-cell"><span class="takken-table-cell-label">科目</span>{{ stat.category }}</div>
-            <div class="takken-table-cell"><span class="takken-table-cell-label">考点</span>{{ takkenTagLabel(stat.tag) }}</div>
-            <div class="takken-table-cell"><span class="takken-table-cell-label">原始错题</span><strong class="takken-mistake-count">{{ stat.total }}</strong></div>
-            <div class="takken-table-cell">
-              <span class="takken-table-cell-label">仍需复习</span>
-              <span v-if="stat.needsReview > 0" class="takken-weak-badge">{{ stat.needsReview }}</span>
-              <span v-else class="takken-muted-badge">0</span>
+        </details>
+
+        <details class="takken-toc">
+          <summary><span>参考教材考点覆盖（选读，非官方数据）</span><span class="takken-coverage-ratio">按错题数从高到低</span></summary>
+          <p class="takken-hint takken-toc-body">每个科目常见知识点的参考清单。灰色条代表"还没有相关错题"——可能是已经掌握，也可能是还没考到过，需要你自己判断，不是数值越高越差的绝对指标。</p>
+          <details v-for="entry in coverageByCategory" :key="entry.category" class="takken-toc takken-coverage">
+            <summary>
+              <span>{{ entry.category }}</span>
+              <span class="takken-coverage-ratio">{{ entry.matchedCount }} / {{ entry.total }} 个考点已出现错题</span>
+            </summary>
+            <div class="takken-heat-list">
+              <div v-for="item in entry.items" :key="item.label" class="takken-heat-row" :class="{ zero: item.errorCount === 0 }">
+                <div class="takken-heat-label">
+                  <span>{{ item.label }}</span>
+                  <span v-if="item.matchedTags.length" class="takken-heat-source">{{ item.matchedTags.join('、') }}</span>
+                </div>
+                <div class="takken-heat-bar-track"><div class="takken-heat-bar" :style="{ width: `${(item.errorCount / entry.maxError) * 100}%` }" /></div>
+                <div class="takken-heat-count">{{ item.errorCount }} 题</div>
+              </div>
             </div>
-            <div class="takken-table-cell">
-              <span class="takken-table-cell-label">已掌握</span>
-              <span v-if="stat.mastered > 0" class="takken-ok-badge">{{ stat.mastered }}</span>
-              <span v-else class="takken-muted-badge">0</span>
-            </div>
-            <div class="takken-table-cell">
-              <span class="takken-table-cell-label">操作</span>
-              <button type="button" class="text-link" @click="practiceTag(stat.tag)">去练习<el-icon><ArrowRight /></el-icon></button>
-            </div>
-          </div>
-        </div>
+          </details>
+        </details>
       </div>
     </section>
   </div>

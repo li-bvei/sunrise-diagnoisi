@@ -56,7 +56,11 @@ function shuffle<T>(list: T[]): T[] {
 
 const route = useRoute()
 const initialTag = typeof route.query.tag === 'string' ? route.query.tag : null
-const selectedCategory = ref<TakkenCategory | null>(initialTag ? classifyTakkenTag(initialTag) : null)
+const initialCategoryParam = typeof route.query.category === 'string' ? (route.query.category as TakkenCategory) : null
+// A link can target a whole subject ("category") without pinning to one specific tag — used by the
+// weakness-analysis page's "去练习" buttons, which point at "this subject's still-needs-review
+// questions" rather than one narrow tag.
+const selectedCategory = ref<TakkenCategory | null>(initialTag ? classifyTakkenTag(initialTag) : initialCategoryParam)
 const selectedTag = ref<string | null>(initialTag)
 
 const filteredQuestions = computed(() => {
@@ -77,8 +81,13 @@ function buildOrder(targetMode: TakkenPracticeMode): string[] {
   return pool.map((question) => question.id)
 }
 
-const mode = ref<TakkenPracticeMode>('all')
-const orderIds = ref<string[]>(buildOrder('all'))
+const VALID_MODES: TakkenPracticeMode[] = ['all', 'wrong', 'random', 'unpracticed', 'favorites', 'dueToday']
+const initialMode: TakkenPracticeMode = typeof route.query.mode === 'string' && (VALID_MODES as string[]).includes(route.query.mode)
+  ? (route.query.mode as TakkenPracticeMode)
+  : 'all'
+
+const mode = ref<TakkenPracticeMode>(initialMode)
+const orderIds = ref<string[]>(buildOrder(initialMode))
 const currentIndex = ref(0)
 
 /** Entering a new practice run (mode switch or filter change) should always present its questions

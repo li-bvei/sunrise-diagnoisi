@@ -549,6 +549,10 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-toc summary::after { content: "▾"; color: var(--color-warning); transition: transform .2s; }
 .takken-toc[open] summary::after { transform: rotate(180deg); }
 .takken-toc ol { margin: 0; padding: 0 18px 16px 34px; color: var(--color-text-secondary); font-size: 13px; }
+.takken-toc-body { padding: 0 18px 18px; }
+.takken-toc-body h3 { margin: 20px 0 12px; font-size: 14px; }
+.takken-toc-body h3:first-child { margin-top: 4px; }
+.takken-toc-body .takken-table { margin-bottom: 0; }
 .takken-toc li { margin-bottom: 6px; }
 .takken-toc a { color: var(--color-primary); font-weight: 600; cursor: pointer; }
 .takken-toc a.active { text-decoration: underline; text-underline-offset: 3px; }
@@ -671,6 +675,25 @@ p, h1, h2, h3 { margin-top: 0; }
 .takken-countdown-number span { font-size: 14px; opacity: .85; }
 .takken-countdown-empty { color: white; font-size: 14px; font-weight: 600; opacity: .9; }
 .takken-countdown .el-input__wrapper { background: white; }
+
+/* The one card the whole 薄弱分析 page is built around — a direct answer to "what do I practice
+   next", not another set of numbers to compare. */
+.takken-priority-card { margin-bottom: 26px; padding: 26px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: linear-gradient(135deg, #eef4f6, var(--color-card)); box-shadow: var(--shadow-card); }
+.takken-priority-eyebrow { display: block; margin-bottom: 6px; color: var(--color-primary); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.takken-priority-card h2 { margin: 0 0 10px; font-size: 24px; }
+.takken-priority-card p { margin: 0 0 14px; color: var(--color-text-secondary); font-size: 14px; line-height: 1.7; }
+.takken-priority-card p strong { color: var(--color-danger); font-size: 16px; }
+.takken-priority-bar { height: 8px; margin-bottom: 18px; border-radius: 999px; background: #e3dede; overflow: hidden; }
+.takken-priority-bar i { display: block; height: 100%; border-radius: 999px; background: var(--color-success); transition: width .2s; }
+.takken-priority-card.done { background: linear-gradient(135deg, #eef7f2, var(--color-card)); }
+.takken-priority-card.done p strong { color: var(--color-success); }
+.takken-priority-card.empty { text-align: center; }
+.takken-priority-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.takken-priority-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-card); }
+.takken-priority-row-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.takken-priority-row-name { font-weight: 700; font-size: 14px; }
+.takken-priority-row-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.takken-priority-row-total { color: var(--color-text-secondary); font-size: 12px; }
 .takken-section-title { margin: 28px 0 14px; font-size: 16px; }
 .takken-hint { margin: -6px 0 16px; color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
 .takken-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 22px; padding: 18px; border: 1px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-card); }
