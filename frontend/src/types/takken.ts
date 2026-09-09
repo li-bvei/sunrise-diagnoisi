@@ -11,6 +11,13 @@ export interface TakkenQuestion {
   id: string
   category?: string
   topicId?: string
+  /** Marks questions added in a review batch; the picker hides this label after first practice. */
+  isNew?: boolean
+  /** How many times this exact question has been reported as a real-world mistake — bumped by
+   * scripts/upsert-takken-questions.mjs whenever the same id is submitted again. A question you
+   * genuinely keep getting wrong across different mock exams should stand out, not blend into the
+   * rest of the bank as "just one more entry". Always >= 1 after normalization. */
+  timesReported: number
   tag: string
   title: string
   stem: string
@@ -97,6 +104,7 @@ export interface TakkenTopicSection {
 
 export interface TakkenTopic {
   id: string
+  isNew?: boolean
   tag: string
   title: TakkenBilingualText
   source: string

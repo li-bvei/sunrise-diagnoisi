@@ -22,7 +22,7 @@ const content = computed(() => {
 
 <template>
   <div class="page-surface">
-    <section class="page-hero compact"><div class="container"><span class="eyebrow">SUNRISE POLICY</span><h1>{{ content[0] }}</h1><p>{{ content[1] }}</p></div></section>
+    <section class="page-hero compact"><div class="container"><span class="eyebrow">{{ settings.dictionary.footer.legal }}</span><h1>{{ content[0] }}</h1><p>{{ content[1] }}</p></div></section>
     <section class="section"><div class="container legal-card"><h2>{{ content[1] }}</h2><p>{{ content[2] }}</p><div class="legal-meta">{{ settings.locale === 'zh-CN' ? '最后更新：第一版设计确认阶段' : '最終更新：初期デザイン確認段階' }}</div></div></section>
   </div>
 </template>

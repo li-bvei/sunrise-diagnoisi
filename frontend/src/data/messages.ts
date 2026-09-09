@@ -2,7 +2,7 @@ export const messages = {
   'zh-CN': {
     brand: 'SUNRISE 专业诊断中心',
     company: 'SUNRISE日晟鸿达株式会社',
-    nav: { home: '首页', tools: '专业诊断', guide: '使用说明', contact: '联系 SUNRISE', menu: '打开菜单' },
+    nav: { home: '首页', tools: '专业诊断', guide: '使用说明', contact: '联系 SUNRISE', menu: '打开菜单', menuClose: '关闭菜单' },
     common: {
       viewTools: '查看全部工具',
       viewDetails: '查看详情',
@@ -33,7 +33,7 @@ export const messages = {
   'ja-JP': {
     brand: 'SUNRISE 専門診断・シミュレーション',
     company: 'SUNRISE日晟鴻達株式会社',
-    nav: { home: 'ホーム', tools: '専門診断', guide: 'ご利用案内', contact: 'SUNRISEへ相談', menu: 'メニューを開く' },
+    nav: { home: 'ホーム', tools: '専門診断', guide: 'ご利用案内', contact: 'SUNRISEへ相談', menu: 'メニューを開く', menuClose: 'メニューを閉じる' },
     common: {
       viewTools: '診断ツールを見る',
       viewDetails: '詳細を見る',

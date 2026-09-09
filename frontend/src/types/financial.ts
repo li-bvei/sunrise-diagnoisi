@@ -20,7 +20,8 @@ export interface PayrollInput {
   age: number
   prefecture: string
   includeCare: boolean
-  residentTaxMonthly: number
+  /** Optional manual override for monthly resident tax. When null the tool estimates it. */
+  residentTaxMonthlyOverride: number | null
 }
 
 export interface PayrollResult {
@@ -30,37 +31,23 @@ export interface PayrollResult {
   employer: InsuranceBreakdown
   incomeTaxMonthly: number
   residentTaxMonthly: number
+  residentTaxIsEstimated: boolean
   takeHomeMonthly: number
+  takeHomeRatio: number
   employerCostMonthly: number
   employerCostAnnual: number
+  annualTakeHome: number
 }
 
-export interface PensionEstimateInput {
-  currentAge: number
-  workUntilAge: number
-  nationalPensionMonths: number
-  employeePensionMonths: number
-  existingAverageRemuneration: number
-  futureAverageRemuneration: number
-}
-
-export interface PensionEstimateResult {
-  futureEmployeeMonths: number
-  coveredBasicMonths: number
-  basicAnnual: number
-  employeeAnnualExisting: number
-  employeeAnnualFuture: number
-  totalAnnual: number
-  totalMonthly: number
-}
-
-export interface PensionTargetResult {
-  currentProjection: PensionEstimateResult
-  targetMonthly: number
-  monthlyGap: number
-  requiredFutureAverageRemuneration: number | null
-  requiredSalaryRange: { lower: number | null; upper: number | null } | null
-  exceedsCurrentCap: boolean
+export interface CorporateTaxResult {
+  taxableProfit: number
+  nationalTax: number
+  localCorporateTax: number
+  inhabitantTax: number
+  enterpriseTax: number
+  total: number
+  effectiveRate: number
+  isDeficit: boolean
 }
 
 export interface ExecutiveScenarioResult {
@@ -72,5 +59,8 @@ export interface ExecutiveScenarioResult {
   personalTakeHomeAnnual: number
   employerInsuranceAnnual: number
   companyCompensationCost: number
-  remainingCompanyProfit: number
+  profitBeforeTax: number
+  corporateTax: CorporateTaxResult
+  retainedAfterTax: number
+  isDeficit: boolean
 }

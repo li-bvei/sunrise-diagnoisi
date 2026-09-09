@@ -237,3 +237,21 @@ test('parseQuestionMeta splits era and question number for the picker filters', 
   assert.deepEqual(runtime.parseQuestionMeta('平成27年 問3'), { era: '平成27年', number: 3 })
   assert.deepEqual(runtime.parseQuestionMeta('no match here'), { era: 'no match here', number: null })
 })
+
+test('timesReported defaults to 1 and survives normalization for both legacy and modern shapes', () => {
+  const legacy = runtime.normalizeTakkenQuestion(legacyQuestion(), [])
+  assert.equal(legacy.timesReported, 1)
+
+  const reported = runtime.normalizeTakkenQuestion(legacyQuestion({ timesReported: 3 }), [])
+  assert.equal(reported.timesReported, 3)
+
+  const modern = runtime.normalizeTakkenQuestion(modernQuestion(), [])
+  assert.equal(modern.timesReported, 1)
+
+  // Malformed values (non-number, zero, negative) fall back to the safe default rather than
+  // propagating garbage into the "反复出错" highlighting.
+  const invalid = runtime.normalizeTakkenQuestion(legacyQuestion({ timesReported: 0 }), [])
+  assert.equal(invalid.timesReported, 1)
+  const negative = runtime.normalizeTakkenQuestion(legacyQuestion({ timesReported: -5 }), [])
+  assert.equal(negative.timesReported, 1)
+})

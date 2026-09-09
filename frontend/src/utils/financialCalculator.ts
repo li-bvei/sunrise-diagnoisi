@@ -1,23 +1,23 @@
 import {
+  CORPORATE_TAX_PARAMETERS,
   HEALTH_STANDARD_GRADES,
   INCOME_TAX_PARAMETERS,
-  PENSION_PARAMETERS,
   PENSION_STANDARD_GRADES,
   PREFECTURE_HEALTH_RATES,
+  RESIDENT_TAX_PARAMETERS,
   SOCIAL_INSURANCE_RATES,
 } from '@/data/financialParameters'
 import type {
+  CorporateTaxResult,
   ExecutiveScenarioResult,
   InsuranceBreakdown,
   PayrollInput,
   PayrollResult,
-  PensionEstimateInput,
-  PensionEstimateResult,
-  PensionTargetResult,
   StandardRemunerationGrade,
 } from '@/types/financial'
 
 const yen = (value: number) => Math.max(0, Math.round(Number.isFinite(value) ? value : 0))
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 export function findStandardGrade(amount: number, grades: StandardRemunerationGrade[]): StandardRemunerationGrade {
   const safeAmount = Math.max(0, Number.isFinite(amount) ? amount : 0)
@@ -62,6 +62,18 @@ export function estimateAnnualIncomeTax(annualSalary: number, annualSocialInsura
   return yen(Math.floor(baseTax * (1 + INCOME_TAX_PARAMETERS.reconstructionSurcharge) / 100) * 100)
 }
 
+/**
+ * Rough personal resident tax for a given annual salary. Resident tax is levied the
+ * following year on the prior year's income; this assumes a stable salary and skips
+ * 調整控除 / 非課税限度額 / 自治体の超過課税, so it runs slightly high.
+ */
+export function estimateAnnualResidentTax(annualSalary: number, annualSocialInsurance: number): number {
+  if (!Number.isFinite(annualSalary) || annualSalary <= 0) return 0
+  const employmentIncome = salaryIncomeAmount(annualSalary)
+  const taxable = Math.max(0, Math.floor((employmentIncome - annualSocialInsurance - RESIDENT_TAX_PARAMETERS.basicDeduction) / 1_000) * 1_000)
+  return yen(taxable * RESIDENT_TAX_PARAMETERS.incomeRate + (taxable > 0 ? RESIDENT_TAX_PARAMETERS.perCapita : 0))
+}
+
 export function calculateInsurance(
   monthlySalary: number,
   prefecture = '東京都',
@@ -97,55 +109,69 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   const monthlySalary = Math.max(0, input.monthlySalary)
   const insurance = calculateInsurance(monthlySalary, input.prefecture, input.includeCare, true)
   const annualSalary = monthlySalary * 12
-  const annualIncomeTax = estimateAnnualIncomeTax(annualSalary, insurance.employee.total * 12)
+  const annualEmployeeInsurance = insurance.employee.total * 12
+  const annualIncomeTax = estimateAnnualIncomeTax(annualSalary, annualEmployeeInsurance)
   const incomeTaxMonthly = yen(annualIncomeTax / 12)
-  const residentTaxMonthly = yen(input.residentTaxMonthly)
+
+  const residentTaxIsEstimated = input.residentTaxMonthlyOverride === null
+  const residentTaxMonthly = residentTaxIsEstimated
+    ? yen(estimateAnnualResidentTax(annualSalary, annualEmployeeInsurance) / 12)
+    : yen(input.residentTaxMonthlyOverride ?? 0)
+
+  const takeHomeMonthly = yen(monthlySalary - insurance.employee.total - incomeTaxMonthly - residentTaxMonthly)
+  const employerCostMonthly = yen(monthlySalary + insurance.employer.total)
   return {
     ...insurance,
     incomeTaxMonthly,
     residentTaxMonthly,
-    takeHomeMonthly: yen(monthlySalary - insurance.employee.total - incomeTaxMonthly - residentTaxMonthly),
-    employerCostMonthly: yen(monthlySalary + insurance.employer.total),
-    employerCostAnnual: yen((monthlySalary + insurance.employer.total) * 12),
+    residentTaxIsEstimated,
+    takeHomeMonthly,
+    takeHomeRatio: monthlySalary > 0 ? takeHomeMonthly / monthlySalary : 0,
+    employerCostMonthly,
+    employerCostAnnual: yen(employerCostMonthly * 12),
+    annualTakeHome: yen(takeHomeMonthly * 12),
   }
 }
 
-export function calculatePensionEstimate(input: PensionEstimateInput): PensionEstimateResult {
-  const futureEmployeeMonths = Math.max(0, Math.round((input.workUntilAge - input.currentAge) * 12))
-  const employeeMonths = Math.max(0, input.employeePensionMonths)
-  const coveredBasicMonths = Math.min(PENSION_PARAMETERS.basicPensionFullMonths, Math.max(0, input.nationalPensionMonths + employeeMonths + futureEmployeeMonths))
-  const basicAnnual = PENSION_PARAMETERS.basicPensionFullAnnual * coveredBasicMonths / PENSION_PARAMETERS.basicPensionFullMonths
-  const employeeAnnualExisting = Math.max(0, input.existingAverageRemuneration) * PENSION_PARAMETERS.employeePensionCoefficient * employeeMonths
-  const employeeAnnualFuture = Math.max(0, input.futureAverageRemuneration) * PENSION_PARAMETERS.employeePensionCoefficient * futureEmployeeMonths
-  const totalAnnual = yen(basicAnnual + employeeAnnualExisting + employeeAnnualFuture)
-  return {
-    futureEmployeeMonths,
-    coveredBasicMonths,
-    basicAnnual: yen(basicAnnual),
-    employeeAnnualExisting: yen(employeeAnnualExisting),
-    employeeAnnualFuture: yen(employeeAnnualFuture),
-    totalAnnual,
-    totalMonthly: yen(totalAnnual / 12),
+/** Combined corporate tax burden for a small/medium company (資本金1億円以下), standard rates. */
+export function estimateCorporateTax(taxableProfit: number): CorporateTaxResult {
+  const profit = Number.isFinite(taxableProfit) ? Math.round(taxableProfit) : 0
+  const p = CORPORATE_TAX_PARAMETERS
+  if (profit <= 0) {
+    return {
+      taxableProfit: profit,
+      nationalTax: 0,
+      localCorporateTax: 0,
+      inhabitantTax: p.inhabitantPerCapita,
+      enterpriseTax: 0,
+      total: p.inhabitantPerCapita,
+      effectiveRate: 0,
+      isDeficit: true,
+    }
   }
-}
-
-export function calculatePensionTarget(input: PensionEstimateInput, targetMonthly: number): PensionTargetResult {
-  const currentProjection = calculatePensionEstimate(input)
-  const targetAnnual = Math.max(0, targetMonthly) * 12
-  const fixedAnnual = currentProjection.basicAnnual + currentProjection.employeeAnnualExisting
-  const months = currentProjection.futureEmployeeMonths
-  const required = months > 0
-    ? Math.max(0, (targetAnnual - fixedAnnual) / (PENSION_PARAMETERS.employeePensionCoefficient * months))
-    : null
-  const cappedRequired = required === null ? null : yen(required)
-  const grade = cappedRequired === null ? null : findStandardGrade(cappedRequired, PENSION_STANDARD_GRADES)
+  const nationalTax = p.nationalLowRate * Math.min(profit, p.nationalLowCap)
+    + p.nationalHighRate * Math.max(0, profit - p.nationalLowCap)
+  const localCorporateTax = nationalTax * p.localCorporateRate
+  const inhabitantTax = nationalTax * p.inhabitantRate + p.inhabitantPerCapita
+  let enterpriseBase = 0
+  let lastUpper = 0
+  for (const bracket of p.enterpriseBrackets) {
+    const slice = clamp(profit - lastUpper, 0, bracket.upper - lastUpper)
+    enterpriseBase += slice * bracket.rate
+    lastUpper = bracket.upper
+    if (profit <= bracket.upper) break
+  }
+  const enterpriseTax = enterpriseBase * (1 + p.specialEnterpriseSurcharge)
+  const total = yen(nationalTax + localCorporateTax + inhabitantTax + enterpriseTax)
   return {
-    currentProjection,
-    targetMonthly: yen(targetMonthly),
-    monthlyGap: yen(Math.max(0, targetMonthly - currentProjection.totalMonthly)),
-    requiredFutureAverageRemuneration: cappedRequired,
-    requiredSalaryRange: grade ? { lower: grade.lower, upper: grade.upper } : null,
-    exceedsCurrentCap: cappedRequired !== null && cappedRequired > PENSION_STANDARD_GRADES[PENSION_STANDARD_GRADES.length - 1]!.monthly,
+    taxableProfit: profit,
+    nationalTax: yen(nationalTax),
+    localCorporateTax: yen(localCorporateTax),
+    inhabitantTax: yen(inhabitantTax),
+    enterpriseTax: yen(enterpriseTax),
+    total,
+    effectiveRate: total / profit,
+    isDeficit: false,
   }
 }
 
@@ -154,30 +180,41 @@ export function calculateExecutiveScenario(
   annualCompanyProfitBeforeCompensation: number,
   prefecture: string,
   includeCare: boolean,
-  residentTaxAnnual: number,
+  residentTaxAnnualOverride: number | null,
 ): ExecutiveScenarioResult {
   const compensation = Math.max(0, monthlyCompensation)
   const insurance = calculateInsurance(compensation, prefecture, includeCare, false)
   const annualCompensation = compensation * 12
   const employeeInsuranceAnnual = insurance.employee.total * 12
   const incomeTaxAnnual = estimateAnnualIncomeTax(annualCompensation, employeeInsuranceAnnual)
-  const safeResidentTax = yen(residentTaxAnnual)
-  const companyCompensationCost = yen(annualCompensation + insurance.employer.total * 12)
+  const residentTaxAnnual = residentTaxAnnualOverride === null
+    ? estimateAnnualResidentTax(annualCompensation, employeeInsuranceAnnual)
+    : yen(residentTaxAnnualOverride)
+  const employerInsuranceAnnual = insurance.employer.total * 12
+  const companyCompensationCost = yen(annualCompensation + employerInsuranceAnnual)
+  const profitBeforeTax = Math.round(annualCompanyProfitBeforeCompensation - companyCompensationCost)
+  const corporateTax = estimateCorporateTax(profitBeforeTax)
+  const retainedAfterTax = Math.round(profitBeforeTax - corporateTax.total)
   return {
     monthlyCompensation: yen(compensation),
     annualCompensation: yen(annualCompensation),
     employeeInsuranceAnnual: yen(employeeInsuranceAnnual),
     incomeTaxAnnual,
-    residentTaxAnnual: safeResidentTax,
-    personalTakeHomeAnnual: yen(annualCompensation - employeeInsuranceAnnual - incomeTaxAnnual - safeResidentTax),
-    employerInsuranceAnnual: yen(insurance.employer.total * 12),
+    residentTaxAnnual,
+    personalTakeHomeAnnual: yen(annualCompensation - employeeInsuranceAnnual - incomeTaxAnnual - residentTaxAnnual),
+    employerInsuranceAnnual: yen(employerInsuranceAnnual),
     companyCompensationCost,
-    remainingCompanyProfit: yen(Math.max(0, annualCompanyProfitBeforeCompensation - companyCompensationCost)),
+    profitBeforeTax,
+    corporateTax,
+    retainedAfterTax,
+    isDeficit: retainedAfterTax < 0,
   }
 }
 
 export function formatYen(value: number, locale: 'zh-CN' | 'ja-JP' = 'zh-CN'): string {
-  return new Intl.NumberFormat(locale === 'ja-JP' ? 'ja-JP' : 'zh-CN', {
+  const safe = Number.isFinite(value) ? value : 0
+  const formatted = new Intl.NumberFormat(locale === 'ja-JP' ? 'ja-JP' : 'zh-CN', {
     style: 'currency', currency: 'JPY', maximumFractionDigits: 0,
-  }).format(Number.isFinite(value) ? value : 0)
+  }).format(Math.abs(safe))
+  return safe < 0 ? `-${formatted}` : formatted
 }

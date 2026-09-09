@@ -216,6 +216,19 @@ function practiceTag(stat: TagStat) {
 function practiceRandom() {
   void router.push({ path: '/tools/takken', query: { mode: 'random' } })
 }
+function practiceQuestion(id: string) {
+  void router.push({ path: '/tools/takken', query: { question: id } })
+}
+
+// A question reported 2+ times (scripts/upsert-takken-questions.mjs bumps this whenever the same
+// id is submitted again as a fresh real-world mistake) is a stronger signal than the tag-level
+// "仍需复习" count — it means you've genuinely gotten THIS exact question wrong more than once, so
+// it's surfaced as its own short list rather than buried inside the per-tag table.
+interface HighPriorityQuestion { id: string; title: string; tag: string; timesReported: number }
+const highPriorityQuestions = computed<HighPriorityQuestion[]>(() => questions
+  .filter((question) => question.timesReported >= 2)
+  .map((question) => ({ id: question.id, title: question.title, tag: question.tag, timesReported: question.timesReported }))
+  .sort((a, b) => b.timesReported - a.timesReported))
 
 interface SyllabusMatch { label: string; matched: boolean; matchedTags: string[]; errorCount: number }
 
@@ -309,6 +322,23 @@ const coverageByCategory = computed(() => sortedCategoryStats.value
                 </span>
               </div>
               <button type="button" class="text-link" @click="practiceCategory(stat)">去练习<el-icon><ArrowRight /></el-icon></button>
+            </div>
+          </div>
+        </template>
+
+        <template v-if="highPriorityQuestions.length > 0">
+          <h2 class="takken-section-title">🔥 反复出错，重点关注</h2>
+          <p class="takken-hint">这些题目被你记录为错题不止一次——不是新题偶尔做错，是真的反复栽在同一题上，建议优先单独练。</p>
+          <div class="takken-priority-list">
+            <div v-for="item in highPriorityQuestions" :key="item.id" class="takken-priority-row">
+              <div class="takken-priority-row-main">
+                <span class="takken-priority-row-name">{{ item.title }}</span>
+                <span class="takken-priority-row-detail">
+                  <span class="takken-picker-badge priority">已记录 {{ item.timesReported }} 次</span>
+                  <span class="takken-priority-row-total">{{ takkenTagLabel(item.tag) }}</span>
+                </span>
+              </div>
+              <button type="button" class="text-link" @click="practiceQuestion(item.id)">去练这道题<el-icon><ArrowRight /></el-icon></button>
             </div>
           </div>
         </template>

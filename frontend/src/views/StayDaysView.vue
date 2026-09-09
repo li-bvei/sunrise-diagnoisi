@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Download, Plus, Edit, Delete } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
 import { practicalToolMessages } from '@/data/practicalToolMessages'
 import { useSettingsStore } from '@/stores/settings'
@@ -15,7 +15,14 @@ const records = ref(loadTravelRecords())
 const dialogOpen = ref(false)
 const editingId = ref<string | null>(null)
 const sortOrder = ref<'desc' | 'asc'>('desc')
-const today = new Date().toISOString().slice(0, 10)
+function localToday(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = `${now.getMonth() + 1}`.padStart(2, '0')
+  const d = `${now.getDate()}`.padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+const today = localToday()
 const draft = reactive<TravelRecordDraft>({ exitDate: today, entryDate: today, exitPort: '', entryPort: '', note: '' })
 const period = reactive({ startDate: `${new Date().getFullYear()}-01-01`, endDate: today })
 const summaries = computed(() => summarizeStayByYear(records.value))
@@ -48,12 +55,29 @@ function saveRecord() {
   }
   persist(); dialogOpen.value = false; ElMessage.success(copy.value.stay.saved)
 }
-function removeRecord(id: string) { records.value = records.value.filter((item) => item.id !== id); persist() }
+async function removeRecord(id: string) {
+  try {
+    await ElMessageBox.confirm(copy.value.stay.removeConfirm, copy.value.stay.removeConfirmTitle, {
+      type: 'warning',
+      confirmButtonText: copy.value.stay.remove,
+      cancelButtonText: copy.value.common.cancel,
+    })
+  } catch {
+    return
+  }
+  records.value = records.value.filter((item) => item.id !== id)
+  persist()
+}
 function exportCsv() {
-  const blob = new Blob([recordsToCsv(sortedRecords.value)], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url; link.download = `sunrise-stay-records-${today}.csv`; link.click(); URL.revokeObjectURL(url)
+  try {
+    const blob = new Blob([recordsToCsv(sortedRecords.value)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url; link.download = `sunrise-stay-records-${today}.csv`; link.click(); URL.revokeObjectURL(url)
+    ElMessage.success(copy.value.stay.exported)
+  } catch {
+    ElMessage.error(copy.value.common.saveFailed)
+  }
 }
 </script>
 

@@ -90,6 +90,21 @@ const mode = ref<TakkenPracticeMode>(initialMode)
 const orderIds = ref<string[]>(buildOrder(initialMode))
 const currentIndex = ref(0)
 
+// A link can also target one exact question (e.g. the analysis page's "反复出错" list) — jump to
+// it directly regardless of the current filter/mode; fall back to the full bank if it isn't in the
+// filtered/mode queue (say, a "只练错题" link to a question that's since been mastered).
+const initialQuestionId = typeof route.query.question === 'string' ? route.query.question : null
+if (initialQuestionId) {
+  const indexInOrder = orderIds.value.indexOf(initialQuestionId)
+  if (indexInOrder >= 0) {
+    currentIndex.value = indexInOrder
+  } else if (questionMap.has(initialQuestionId)) {
+    mode.value = 'all'
+    orderIds.value = questions.map((question) => question.id)
+    currentIndex.value = orderIds.value.indexOf(initialQuestionId)
+  }
+}
+
 /** Entering a new practice run (mode switch or filter change) should always present its questions
  * as freshly answerable — a question can be in the "只练错题" queue precisely because it was already
  * answered (wrongly) in a previous run, so leaving old session answers in place would show it as
@@ -373,6 +388,7 @@ function heroCtaAction() {
             <div class="takken-card-head">
               <span class="takken-tag">{{ currentQuestion.tag }}</span>
               <span class="takken-title">{{ currentQuestion.title }}</span>
+              <span v-if="currentQuestion.timesReported >= 2" class="takken-priority-flag">🔥 重点关注 · 已记录 {{ currentQuestion.timesReported }} 次</span>
               <button type="button" class="takken-favorite-toggle" :aria-label="favorites.has(currentQuestion.id) ? '取消收藏' : '收藏本题'" @click="toggleFavorite(currentQuestion.id)">
                 <el-icon :size="18"><StarFilled v-if="favorites.has(currentQuestion.id)" /><Star v-else /></el-icon>
               </button>

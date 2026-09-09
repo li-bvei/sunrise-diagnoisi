@@ -79,6 +79,7 @@ function pick(id: string) {
 
       <div class="filter-pills takken-pills-wrap takken-picker-status">
         <button type="button" :class="{ active: statusFilter === 'all' }" @click="statusFilter = 'all'">全部</button>
+        <button type="button" :class="{ active: statusFilter === 'new' }" @click="statusFilter = 'new'">新题</button>
         <button type="button" :class="{ active: statusFilter === 'unpracticed' }" @click="statusFilter = 'unpracticed'">未练习</button>
         <button type="button" :class="{ active: statusFilter === 'needsReview' }" @click="statusFilter = 'needsReview'">仍需复习</button>
         <button type="button" :class="{ active: statusFilter === 'mastered' }" @click="statusFilter = 'mastered'">已掌握</button>
@@ -102,6 +103,8 @@ function pick(id: string) {
             <span class="takken-picker-badge" :class="statusOf(question.id)">
               {{ statusOf(question.id) === 'mastered' ? '已掌握' : statusOf(question.id) === 'needsReview' ? '仍需复习' : '未练习' }}
             </span>
+            <span v-if="question.isNew && !attempts[question.id]" class="takken-picker-badge new">新题</span>
+            <span v-if="question.timesReported >= 2" class="takken-picker-badge priority">🔥 重点 ×{{ question.timesReported }}</span>
             <span v-if="favorites.has(question.id)" class="takken-picker-badge favorite">已收藏</span>
             <span class="takken-picker-attempts">已答 {{ attempts[question.id]?.attempts ?? 0 }} 次</span>
           </div>

@@ -15,8 +15,7 @@ const icon = computed(() => iconMap[props.tool.icon as IconName])
 <template>
   <article class="tool-card">
     <div class="tool-card-topline">
-      <span class="tool-icon"><el-icon :size="22"><component :is="icon" /></el-icon></span>
-      <el-tag type="success" effect="light" round>{{ settings.dictionary.common.available }}</el-tag>
+      <span class="tool-icon"><el-icon :size="20"><component :is="icon" /></el-icon></span>
     </div>
     <span class="tool-category">{{ settings.text(categoryName(tool.category)) }}</span>
     <h3>{{ settings.text(tool.name) }}</h3>

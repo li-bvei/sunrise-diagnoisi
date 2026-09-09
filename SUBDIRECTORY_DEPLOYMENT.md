@@ -1,5 +1,7 @@
 # `/server/` 子目录部署适配说明
 
+> 当前文档描述的是目标部署方式。请先阅读 [`docs/PROJECT_HANDOFF.md`](docs/PROJECT_HANDOFF.md) 和 [`docs/CHANGE_RECOMMENDATIONS.md`](docs/CHANGE_RECOMMENDATIONS.md)。当前 `vite.config.ts` 尚未真正读取 `VITE_BASE_PATH`，根路径/子路径构建需要先按 P0 建议修复并验证后，才能将本文件视为最终运行手册。
+
 ## 目标
 
 项目需要同时支持两种访问方式：

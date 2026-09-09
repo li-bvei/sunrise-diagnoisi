@@ -2,8 +2,8 @@ import type { StandardRemunerationGrade } from '@/types/financial'
 
 export const FINANCIAL_PARAMETER_META = {
   applicableYear: 2026,
-  updatedAt: '2026-08-19',
-  note: '协会社保一般被保险者、一般事业雇用保险及2026年度年金参数的简易模拟。',
+  updatedAt: '2026-09-09',
+  note: '基于协会社保一般被保险者、一般事业雇用保险、2026 年度所得税・住民税与中小法人标准税率的简易概算。',
   sources: [
     {
       label: '全国健康保険協会 令和8年度都道府県単位保険料率',
@@ -24,6 +24,14 @@ export const FINANCIAL_PARAMETER_META = {
     {
       label: '国税庁 令和8年分 給与所得者と税',
       url: 'https://www.nta.go.jp/publication/pamph/koho/kurashi/html/02_1.htm',
+    },
+    {
+      label: '総務省 個人住民税の概要（所得割・均等割）',
+      url: 'https://www.soumu.go.jp/main_sosiki/jichi_zeisei/czaisei/czaisei_seido/individual-inhabitant-tax.html',
+    },
+    {
+      label: '国税庁 No.5759 法人税の税率',
+      url: 'https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5759.htm',
     },
   ],
 } as const
@@ -85,12 +93,37 @@ export const PENSION_STANDARD_GRADES: StandardRemunerationGrade[] = [
   [31, 620000, 605000, 635000], [32, 650000, 635000, null],
 ].map(([grade, monthly, lower, upper]) => ({ grade: grade!, monthly: monthly!, lower: lower ?? null, upper: upper ?? null }))
 
-export const PENSION_PARAMETERS = {
+export const RESIDENT_TAX_PARAMETERS = {
   applicableYear: 2026,
-  basicPensionFullAnnual: 70_608 * 12,
-  basicPensionFullMonths: 480,
-  employeePensionCoefficient: 5.481 / 1000,
-  note: '厚生年金部分按平成15年4月以后5.481‰简化计算，不含奖金、再评价率、加给年金与经过去措置。',
+  /** 所得割：都道府県民税4% + 市区町村民税6%（政令指定都市を含む標準割合の合算） */
+  incomeRate: 0.1,
+  /** 住民税の基礎控除（合計所得2,400万円以下） */
+  basicDeduction: 430_000,
+  /** 均等割（道府県1,000円 + 市町村3,000円）+ 森林環境税1,000円 */
+  perCapita: 5_000,
+  note: '住民税は前年所得を基準に翌年課税されます。ここでは同水準の年収が続くと仮定した概算で、調整控除・非課税限度額・自治体独自の超過課税は反映していません。',
+} as const
+
+export const CORPORATE_TAX_PARAMETERS = {
+  applicableYear: 2026,
+  scope: '資本金1億円以下の中小法人（普通法人）を前提とした概算。',
+  /** 法人税：年800万円以下15% / 超過分23.2% */
+  nationalLowRate: 0.15,
+  nationalLowCap: 8_000_000,
+  nationalHighRate: 0.232,
+  /** 地方法人税：法人税額の10.3% */
+  localCorporateRate: 0.103,
+  /** 法人住民税 法人税割（道府県+市町村の標準税率合算 概算7.0%）+ 均等割 */
+  inhabitantRate: 0.07,
+  inhabitantPerCapita: 70_000,
+  /** 法人事業税（所得割・標準税率）＋特別法人事業税（事業税額の37%） */
+  enterpriseBrackets: [
+    { upper: 4_000_000, rate: 0.035 },
+    { upper: 8_000_000, rate: 0.053 },
+    { upper: Number.POSITIVE_INFINITY, rate: 0.07 },
+  ],
+  specialEnterpriseSurcharge: 0.37,
+  note: '法人税・地方法人税・法人住民税・法人事業税・特別法人事業税を標準税率で概算した合算値です。繰越欠損金、税額控除、外形標準課税、自治体の超過税率、消費税は含みません。赤字の場合は法人住民税の均等割のみを表示します。',
 } as const
 
 export const INCOME_TAX_PARAMETERS = {

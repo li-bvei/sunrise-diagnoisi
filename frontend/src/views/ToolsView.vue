@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { InfoFilled } from '@element-plus/icons-vue'
 import ToolCard from '@/components/ToolCard.vue'
 import { categories, tools } from '@/data/tools'
 import type { DiagnosisTool, ToolCategory } from '@/types/content'
@@ -15,18 +14,16 @@ const activeCategory = ref<'all' | ToolCategory>(validCategory ? route.query.cat
 const filteredTools = computed(() => activeCategory.value === 'all' ? tools : tools.filter((tool) => tool.category === activeCategory.value))
 const copy = computed(() => settings.locale === 'zh-CN' ? {
   eyebrow: '全部工具',
-  title: '专业诊断工具中心',
-  description: '从在留资格、不动产、收入社保、年金到在日记录，选择适合您当前情况的实用工具。',
+  title: '专业诊断工具',
+  description: '在留资格、不动产、收入与经营、在日记录——选择适合当前情况的工具。计算结果为初步参考值。',
   all: '全部',
-  notice: '以下项目均已开放，可直接进入使用。计算结果为简易参考值。',
-  showing: `显示 ${filteredTools.value.length} 项工具`,
+  showing: `${filteredTools.value.length} 项工具`,
 } : {
   eyebrow: '全ツール',
-  title: '専門診断ツールセンター',
-  description: '在留資格、不動産、収入・社会保険、年金、在日記録から必要なツールをお選びください。',
+  title: '専門診断ツール',
+  description: '在留資格、不動産、収入・経営、在日記録。目的に合うツールをお選びください。結果は初期判断の参考値です。',
   all: 'すべて',
-  notice: '以下のツールはすべて公開済みです。計算結果は簡易的な参考値です。',
-  showing: `${filteredTools.value.length}件のツールを表示`,
+  showing: `${filteredTools.value.length} 件`,
 })
 
 watch(activeCategory, (value) => {
@@ -49,7 +46,6 @@ function selectTool(tool: DiagnosisTool) {
     </section>
     <section class="section">
       <div class="container">
-        <div class="notice-bar"><el-icon><InfoFilled /></el-icon><span>{{ copy.notice }}</span></div>
         <div class="filter-bar">
           <div class="filter-pills">
             <button :class="{ active: activeCategory === 'all' }" type="button" @click="activeCategory = 'all'">{{ copy.all }}</button>

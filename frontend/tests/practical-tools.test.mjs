@@ -24,6 +24,10 @@ const bundled = await build({
 })
 const runtime = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`)
 
+const payroll = (overrides = {}) => runtime.calculatePayroll({
+  monthlySalary: 350_000, age: 35, prefecture: '東京都', includeCare: false, residentTaxMonthlyOverride: null, ...overrides,
+})
+
 test('standard remuneration boundaries are lower-inclusive and upper-exclusive', () => {
   assert.equal(runtime.findStandardGrade(289_999, runtime.HEALTH_STANDARD_GRADES).monthly, 280_000)
   assert.equal(runtime.findStandardGrade(290_000, runtime.HEALTH_STANDARD_GRADES).monthly, 300_000)
@@ -34,29 +38,46 @@ test('standard remuneration boundaries are lower-inclusive and upper-exclusive',
 
 test('payroll handles empty and invalid amounts without negative or non-finite output', () => {
   for (const amount of [0, Number.NaN, -100]) {
-    const result = runtime.calculatePayroll({ monthlySalary: amount, age: 35, prefecture: '東京都', includeCare: false, residentTaxMonthly: 0 })
+    const result = payroll({ monthlySalary: amount })
     assert.ok(Number.isFinite(result.takeHomeMonthly))
     assert.ok(result.takeHomeMonthly >= 0)
     assert.ok(result.employerCostMonthly >= 0)
   }
   assert.match(runtime.formatYen(123_456, 'zh-CN'), /123,456/)
   assert.match(runtime.formatYen(123_456, 'ja-JP'), /123,456/)
+  assert.match(runtime.formatYen(-5_000, 'ja-JP'), /^-/)
 })
 
-test('pension forward estimate and target reverse calculation stay consistent', () => {
-  const input = {
-    currentAge: 35,
-    workUntilAge: 65,
-    nationalPensionMonths: 24,
-    employeePensionMonths: 120,
-    existingAverageRemuneration: 320_000,
-    futureAverageRemuneration: 400_000,
-  }
-  const estimate = runtime.calculatePensionEstimate(input)
-  const reverse = runtime.calculatePensionTarget(input, estimate.totalMonthly)
-  assert.ok(Math.abs(reverse.requiredFutureAverageRemuneration - input.futureAverageRemuneration) < 5_000)
-  assert.equal(reverse.exceedsCurrentCap, false)
-  assert.ok(estimate.totalAnnual > 0)
+test('payroll estimates resident tax by default and honours a manual override', () => {
+  const auto = payroll()
+  assert.equal(auto.residentTaxIsEstimated, true)
+  assert.ok(auto.residentTaxMonthly > 0, 'resident tax should be estimated, not zero')
+  // take-home is always below gross and the ratio is a sane fraction
+  assert.ok(auto.takeHomeMonthly < 350_000)
+  assert.ok(auto.takeHomeRatio > 0.6 && auto.takeHomeRatio < 0.95)
+  // company cost sits above gross because it carries the employer insurance share
+  assert.ok(auto.employerCostMonthly > 350_000)
+
+  const overridden = payroll({ residentTaxMonthlyOverride: 0 })
+  assert.equal(overridden.residentTaxIsEstimated, false)
+  assert.equal(overridden.residentTaxMonthly, 0)
+  assert.ok(overridden.takeHomeMonthly > auto.takeHomeMonthly)
+})
+
+test('executive scenario adds corporate tax and shows a deficit instead of clamping to zero', () => {
+  const healthy = runtime.calculateExecutiveScenario(500_000, 30_000_000, '東京都', true, null)
+  assert.ok(healthy.corporateTax.total > 0)
+  assert.ok(healthy.corporateTax.effectiveRate > 0.15 && healthy.corporateTax.effectiveRate < 0.45)
+  assert.equal(healthy.retainedAfterTax, healthy.profitBeforeTax - healthy.corporateTax.total)
+  assert.equal(healthy.isDeficit, false)
+
+  // compensation far above the profit pool -> negative retained profit must be reported
+  const deficit = runtime.calculateExecutiveScenario(3_000_000, 5_000_000, '東京都', true, null)
+  assert.ok(deficit.profitBeforeTax < 0)
+  assert.ok(deficit.retainedAfterTax < 0)
+  assert.equal(deficit.isDeficit, true)
+  assert.equal(deficit.corporateTax.isDeficit, true)
+  assert.equal(deficit.corporateTax.total, runtime.CORPORATE_TAX_PARAMETERS.inhabitantPerCapita)
 })
 
 test('stay records reject bad dates, count leap years, merge overlaps, and export CSV', () => {
@@ -71,22 +92,24 @@ test('stay records reject bad dates, count leap years, merge overlaps, and expor
   assert.equal(summary.daysInYear, 366)
   assert.equal(summary.awayDays, 15)
   assert.equal(summary.inJapanDays, 351)
-  assert.match(runtime.recordsToCsv(records), /^\uFEFF/)
+  assert.match(runtime.recordsToCsv(records), /^﻿/)
   assert.match(runtime.recordsToCsv(records), /""two""/)
 })
 
-test('all practical tools are real routes and placeholder entries are gone', () => {
+test('the financial tools are merged into salary + executive with working redirects', () => {
   const tools = read('../src/data/tools.ts')
   const router = read('../src/router/index.ts')
   const messages = read('../src/data/practicalToolMessages.ts')
-  const vite = read('../vite.config.ts')
-  for (const removed of ['business-readiness', 'home-purchase', 'home-sale', 'company-payroll', 'departure-pension', "status: 'upcoming'"]) {
+
+  for (const removed of ['business-readiness', 'home-purchase', 'company-payroll', "status: 'upcoming'", "id: 'pension", "id: 'standard-remuneration'"]) {
     assert.doesNotMatch(tools, new RegExp(removed))
   }
-  for (const path of ['payroll', 'standard-remuneration', 'pension', 'executive-compensation', 'stay-days']) {
-    assert.match(router, new RegExp(`tools/${path}`))
+  for (const path of ['salary', 'executive-compensation', 'stay-days']) {
+    assert.match(router, new RegExp(`tools/${path}'`))
   }
-  assert.match(messages, /工资手取与公司实际成本/)
-  assert.match(messages, /給与手取り・会社実質負担/)
-  assert.match(vite, /production' \? '\/server\/'/)
+  for (const legacy of ['payroll', 'standard-remuneration', 'pension']) {
+    assert.match(router, new RegExp(`path: 'tools/${legacy}', redirect:`))
+  }
+  assert.match(messages, /工资、社保与到手金额/)
+  assert.match(messages, /給与・社会保険・手取り/)
 })

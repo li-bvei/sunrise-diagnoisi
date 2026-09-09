@@ -2,7 +2,7 @@ export type Locale = 'zh-CN' | 'ja-JP'
 
 export type LocalizedText = Record<Locale, string>
 
-export type ToolCategory = 'residence' | 'property' | 'income' | 'pension' | 'records' | 'exam'
+export type ToolCategory = 'residence' | 'property' | 'income' | 'records' | 'exam'
 export type ToolStatus = 'available'
 
 export interface DiagnosisTool {
@@ -15,6 +15,7 @@ export interface DiagnosisTool {
   results: LocalizedText
   status: ToolStatus
   route?: string
+  featured?: boolean
 }
 
 export interface CategoryInfo {

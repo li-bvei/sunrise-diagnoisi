@@ -41,6 +41,8 @@ export function normalizeTakkenQuestion(raw: unknown, issues: TakkenQuestionIssu
   const takeaway = typeof raw.takeaway === 'string' ? raw.takeaway : ''
   const category = typeof raw.category === 'string' ? raw.category : undefined
   const topicId = typeof raw.topicId === 'string' ? raw.topicId : undefined
+  const isNew = raw.isNew === true
+  const timesReported = typeof raw.timesReported === 'number' && raw.timesReported >= 1 ? Math.floor(raw.timesReported) : 1
 
   if (!stem) issues.push({ id, message: '日语题干为空。' })
   if (!explain) issues.push({ id, message: '解析为空。' })
@@ -85,7 +87,7 @@ export function normalizeTakkenQuestion(raw: unknown, issues: TakkenQuestionIssu
 
   if (options.length !== 4) issues.push({ id, message: `选项数量应为 4 个，实际 ${options.length} 个。` })
 
-  return { id, category, topicId, tag, title, stem, options, correctOptionId, explain, takeaway }
+  return { id, category, topicId, isNew, timesReported, tag, title, stem, options, correctOptionId, explain, takeaway }
 }
 
 export function normalizeTakkenQuestions(raw: unknown): { questions: TakkenQuestion[]; issues: TakkenQuestionIssue[] } {
@@ -133,7 +135,7 @@ export function parseQuestionMeta(title: string): TakkenQuestionMeta {
   return { era, number: Number.isFinite(number) ? number : null }
 }
 
-export type TakkenQuestionStatusFilter = 'all' | 'unpracticed' | 'needsReview' | 'mastered' | 'favorite' | 'dueToday'
+export type TakkenQuestionStatusFilter = 'all' | 'new' | 'unpracticed' | 'needsReview' | 'mastered' | 'favorite' | 'dueToday'
 
 export interface TakkenQuestionFilter {
   keyword?: string
@@ -162,6 +164,7 @@ export function filterTakkenQuestions(
     if (filter.category && filter.category !== 'all' && classifyTakkenTag(question.tag) !== filter.category) return false
     if (filter.era && filter.era !== 'all' && parseQuestionMeta(question.title).era !== filter.era) return false
     const status = filter.status ?? 'all'
+    if (status === 'new' && !(question.isNew && !attempts[question.id])) return false
     if (status === 'favorite' && !favorites.has(question.id)) return false
     if (status === 'dueToday' && !isDueToday(attempts[question.id])) return false
     if (status === 'unpracticed' || status === 'needsReview' || status === 'mastered') {
