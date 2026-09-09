@@ -157,6 +157,10 @@ npm run build
 
 ## 8. 部署和上线风险
 
+### 8.0 服务器更新流程
+
+服务器把仓库 clone 到站点目录（示例 `/www/wwwroot/sunrise-diagnoisi`），更新用 `scripts/deploy.sh`：`git fetch` → `git reset --hard <ref>` → `docker compose up -d --build --remove-orphans` → `docker image prune` → 等待健康检查 → `docker compose ps`。服务器只作部署目标，`reset --hard` 会覆盖已跟踪文件的本地改动；根目录 `.env`（被 .gitignore 忽略）用于保存 `VITE_BASE_PATH`，不受影响。详见 README「在服务器上更新部署」。
+
 ### 8.1 Vite base path 是当前最高风险
 
 当前配置：

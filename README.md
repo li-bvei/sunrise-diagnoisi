@@ -84,6 +84,44 @@ docker compose down
 
 Docker 预览地址为 `http://127.0.0.1:8090`。Node 仅在多阶段构建的第一阶段运行，生产容器由 Nginx 静态托管。
 
+## 在服务器上更新部署
+
+服务器把本仓库直接 clone 到站点目录（示例 `/www/wwwroot/sunrise-diagnoisi`），每次上线就是「拉取最新代码 → 重新构建容器」。
+
+一键脚本（推荐）：
+
+```bash
+cd /www/wwwroot/sunrise-diagnoisi
+bash scripts/deploy.sh            # 部署 origin/main
+bash scripts/deploy.sh <分支或标签>  # 部署指定分支 / 标签 / 提交
+```
+
+`scripts/deploy.sh` 会依次：拉取代码并 `git reset --hard` 到目标版本 → `docker compose up -d --build --remove-orphans` → 清理悬空镜像 → 等待 Docker 健康检查为 `healthy` → 打印 `docker compose ps`。健康检查失败时会输出容器日志并以非零码退出。
+
+等价的手动步骤：
+
+```bash
+cd /www/wwwroot/sunrise-diagnoisi
+
+# 1. 拉取最新代码（丢弃服务器上对「已跟踪文件」的本地改动；
+#    根目录 .env 被 .gitignore 忽略，不受影响）
+git fetch --prune origin
+git reset --hard origin/main
+
+# 2. 重新构建并启动容器，清理旧镜像
+docker compose up -d --build --remove-orphans
+docker image prune -f
+
+# 3. 确认状态（Docker 健康检查为 healthy 即成功）
+docker compose ps
+docker compose logs -f --tail=100
+```
+
+- **服务器只作部署目标**，不要在上面直接改代码；`git reset --hard` 会覆盖已跟踪文件的本地改动。
+- **子路径部署（`/server/`）**：先在项目根目录准备好 `.env`（写 `VITE_BASE_PATH=/server/`）再执行，`reset --hard` 不会动它；改回根路径就删掉该值或该文件再重新部署。
+- **回滚**：`bash scripts/deploy.sh <旧提交号>`，或手动 `git reset --hard <旧提交>` 后重新 `docker compose up -d --build`。
+- SSL / HTTPS 与对外域名由宝塔或宿主机 Nginx 处理，容器只监听 `127.0.0.1:8090`。
+
 ## 宝塔 / 宿主机 Nginx 反向代理
 
 容器端口仅绑定 `127.0.0.1:8090`，不会直接暴露到公网。
