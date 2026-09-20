@@ -239,10 +239,14 @@ test('date pickers use stable values and numeric Chinese/Japanese calendar label
   assert.match(calculatorSource, /calculateAge/)
 })
 
-test('report remains printable and charts remain visible at all sizes', () => {
-  assert.match(stylesSource, /@media print/)
-  assert.match(stylesSource, /@page \{ size: A4 portrait/)
-  assert.match(stylesSource, /\.report-dialog \.el-dialog__footer \{ display: none/)
+test('print/PDF export was removed and charts remain visible at all sizes', () => {
+  assert.doesNotMatch(stylesSource, /@media print/)
+  assert.doesNotMatch(stylesSource, /@page \{ size: A4 portrait/)
+  assert.doesNotMatch(stylesSource, /report-print-compact/)
   assert.match(stylesSource, /\.result-chart-grid/)
+  assert.doesNotMatch(viewSource, /printReport|window\.print\(\)/)
+  const rentalViewSource = readFileSync(new URL('../src/views/RentalCostView.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(rentalViewSource, /printReport|window\.print\(\)/)
+  assert.doesNotMatch(reportViewSource, /打印|印刷|另存为PDF|PDFとして保存/)
   assert.doesNotMatch(machineNamesSource, /officialName:/)
 })

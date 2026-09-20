@@ -22,7 +22,7 @@ export const tools: DiagnosisTool[] = [
   {
     id: 'rental', category: 'property', icon: 'Key', name: { 'zh-CN': '租房初期费用诊断', 'ja-JP': '賃貸初期費用診断' },
     description: { 'zh-CN': '按房源实际收费逐项勾选填写，生成可交给客户的费用与材料清单。', 'ja-JP': '物件ごとの実費を項目別に入力し、お客様にお渡しできる費用・書類リストを作成します。' },
-    duration: { 'zh-CN': '约 3 分钟', 'ja-JP': '約3分' }, results: { 'zh-CN': '初期费用明细、材料清单、可打印报告', 'ja-JP': '初期費用内訳、必要書類、印刷用レポート' }, status: 'available', route: '/tools/rental-cost', featured: true,
+    duration: { 'zh-CN': '约 3 分钟', 'ja-JP': '約3分' }, results: { 'zh-CN': '初期费用明细、材料清单、可查看报告', 'ja-JP': '初期費用内訳、必要書類、レポート表示' }, status: 'available', route: '/tools/rental-cost', featured: true,
   },
   {
     id: 'salary', category: 'income', icon: 'Coin', name: { 'zh-CN': '工资、社保与到手金额', 'ja-JP': '給与・社会保険・手取り' },
@@ -31,8 +31,8 @@ export const tools: DiagnosisTool[] = [
   },
   {
     id: 'executive-compensation', category: 'income', icon: 'Briefcase', name: { 'zh-CN': '役员报酬模拟', 'ja-JP': '役員報酬シミュレーター' },
-    description: { 'zh-CN': '比较不同役员报酬方案下的个人到手、公司社保负担、法人税与税后留存利润。', 'ja-JP': '役員報酬プランごとの個人手取り、会社の社会保険負担、法人税、税引後の留保利益を比較します。' },
-    duration: { 'zh-CN': '约 3 分钟', 'ja-JP': '約3分' }, results: { 'zh-CN': '方案对比、个人到手、法人税、留存利润', 'ja-JP': 'プラン比較、個人手取り、法人税、留保利益' }, status: 'available', route: '/tools/executive-compensation',
+    description: { 'zh-CN': '输入役员年工资，自动折算月工资，并给出每月、每年的社保与税金支付明细。', 'ja-JP': '役員の年収を入力すると月額報酬に換算し、月次・年次の社会保険・税金の支払内訳を確認できます。' },
+    duration: { 'zh-CN': '约 1 分钟', 'ja-JP': '約1分' }, results: { 'zh-CN': '月工资、月度/年度支付明细', 'ja-JP': '月額報酬、月次・年次の支払内訳' }, status: 'available', route: '/tools/executive-compensation',
   },
   {
     id: 'stay-days', category: 'records', icon: 'Suitcase', name: { 'zh-CN': '在日天数与出入境记录', 'ja-JP': '在日日数・出入国記録' },

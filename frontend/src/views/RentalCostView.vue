@@ -64,7 +64,7 @@ const copy = computed(() => zh.value ? {
   validationCustom: '自定义项目请同时填写名称和金额，或删除未完成的行。',
   validationEmpty: '请至少勾选一个费用项目并填写金额。',
   reportTitle: '租房初期费用清单预览',
-  close: '关闭', print: '打印 / 另存为PDF',
+  close: '关闭',
 } : {
   eyebrow: '賃貸初期費用一覧',
   title: '賃貸初期費用診断',
@@ -81,7 +81,7 @@ const copy = computed(() => zh.value ? {
   validationCustom: '自由項目は名称と金額の両方を入力するか、未完了の行を削除してください。',
   validationEmpty: '費用項目を1つ以上選択し、金額を入力してください。',
   reportTitle: '賃貸初期費用一覧・プレビュー',
-  close: '閉じる', print: '印刷 / PDFとして保存',
+  close: '閉じる',
 })
 
 const suggestedCurrentMonthRent = computed(() => {
@@ -160,28 +160,6 @@ function generateReport() {
   })
   reportVisible.value = true
   trackEvent({ type: 'tool_complete', toolId: 'rental' })
-}
-
-function printReport() {
-  const el = document.querySelector('.diagnosis-report') as HTMLElement | null
-  if (el) {
-    const previousZoom = el.style.getPropertyValue('zoom')
-    const previousWidth = el.style.width
-    el.classList.add('report-print-compact')
-    el.style.setProperty('zoom', '1')
-    el.style.width = '703px'
-    const naturalHeight = el.scrollHeight
-    el.style.width = previousWidth
-    const targetHeight = 1040
-    const scale = naturalHeight > targetHeight ? Math.max(0.6, targetHeight / naturalHeight) : 1
-    el.style.setProperty('zoom', String(scale))
-    window.addEventListener('afterprint', function restore() {
-      el.classList.remove('report-print-compact')
-      if (previousZoom) el.style.setProperty('zoom', previousZoom)
-      else el.style.removeProperty('zoom')
-    }, { once: true })
-  }
-  window.print()
 }
 
 function reset() {
@@ -276,8 +254,7 @@ function reset() {
       <div class="report-page-background"><RentalCostReportView v-if="report" :key="report.locale" :report="report" /></div>
       <template #footer>
         <div class="report-actions">
-          <el-button @click="reportVisible = false">{{ copy.close }}</el-button>
-          <el-button type="primary" @click="printReport">{{ copy.print }}</el-button>
+          <el-button type="primary" @click="reportVisible = false">{{ copy.close }}</el-button>
         </div>
       </template>
     </el-dialog>

@@ -338,27 +338,6 @@ function createReport() {
   }, result.value, settings.locale)
   reportVisible.value = true
 }
-function printReport() {
-  const el = document.querySelector('.diagnosis-report') as HTMLElement | null
-  if (el) {
-    const previousZoom = el.style.getPropertyValue('zoom')
-    const previousWidth = el.style.width
-    el.classList.add('report-print-compact')
-    el.style.setProperty('zoom', '1')
-    el.style.width = '703px'
-    const naturalHeight = el.scrollHeight
-    el.style.width = previousWidth
-    const targetHeight = 1040
-    const scale = naturalHeight > targetHeight ? Math.max(0.6, targetHeight / naturalHeight) : 1
-    el.style.setProperty('zoom', String(scale))
-    window.addEventListener('afterprint', function restore() {
-      el.classList.remove('report-print-compact')
-      if (previousZoom) el.style.setProperty('zoom', previousZoom)
-      else el.style.removeProperty('zoom')
-    }, { once: true })
-  }
-  window.print()
-}
 function reset() {
   Object.assign(form, initialForm())
   incomeText.value = ''
@@ -575,8 +554,7 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
       <div class="report-page-background"><DiagnosisReportView v-if="report" :key="report.locale" :report="report" /></div>
       <template #footer>
         <div class="report-actions">
-          <el-button @click="reportVisible = false">{{ zh ? '关闭' : '閉じる' }}</el-button>
-          <el-button type="primary" @click="printReport">{{ zh ? '打印 / 另存为PDF' : '印刷 / PDFとして保存' }}</el-button>
+          <el-button type="primary" @click="reportVisible = false">{{ zh ? '关闭' : '閉じる' }}</el-button>
         </div>
       </template>
     </el-dialog>

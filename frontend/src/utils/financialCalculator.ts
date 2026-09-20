@@ -1,5 +1,5 @@
 import {
-  CORPORATE_TAX_PARAMETERS,
+  DEPENDENT_DEDUCTION_PARAMETERS,
   HEALTH_STANDARD_GRADES,
   INCOME_TAX_PARAMETERS,
   PENSION_STANDARD_GRADES,
@@ -8,8 +8,7 @@ import {
   SOCIAL_INSURANCE_RATES,
 } from '@/data/financialParameters'
 import type {
-  CorporateTaxResult,
-  ExecutiveScenarioResult,
+  ExecutiveCompensationResult,
   InsuranceBreakdown,
   PayrollInput,
   PayrollResult,
@@ -17,7 +16,6 @@ import type {
 } from '@/types/financial'
 
 const yen = (value: number) => Math.max(0, Math.round(Number.isFinite(value) ? value : 0))
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 export function findStandardGrade(amount: number, grades: StandardRemunerationGrade[]): StandardRemunerationGrade {
   const safeAmount = Math.max(0, Number.isFinite(amount) ? amount : 0)
@@ -53,10 +51,22 @@ export function basicIncomeDeduction(totalIncome: number): number {
   return 0
 }
 
-export function estimateAnnualIncomeTax(annualSalary: number, annualSocialInsurance: number): number {
+/** 一般の控除対象扶養親族（16歳以上）を一律の人数で概算した所得税側の扶養控除額。 */
+export function dependentIncomeTaxDeduction(dependentCount: number): number {
+  const count = Math.max(0, Math.round(Number.isFinite(dependentCount) ? dependentCount : 0))
+  return count * DEPENDENT_DEDUCTION_PARAMETERS.incomeTaxPerDependent
+}
+
+/** Same idea for the (higher, in this case actually lower-valued) resident-tax side deduction. */
+export function dependentResidentTaxDeduction(dependentCount: number): number {
+  const count = Math.max(0, Math.round(Number.isFinite(dependentCount) ? dependentCount : 0))
+  return count * DEPENDENT_DEDUCTION_PARAMETERS.residentTaxPerDependent
+}
+
+export function estimateAnnualIncomeTax(annualSalary: number, annualSocialInsurance: number, dependentCount = 0): number {
   if (!Number.isFinite(annualSalary) || annualSalary <= 0) return 0
   const employmentIncome = salaryIncomeAmount(annualSalary)
-  const taxable = Math.max(0, Math.floor((employmentIncome - annualSocialInsurance - basicIncomeDeduction(employmentIncome)) / 1_000) * 1_000)
+  const taxable = Math.max(0, Math.floor((employmentIncome - annualSocialInsurance - basicIncomeDeduction(employmentIncome) - dependentIncomeTaxDeduction(dependentCount)) / 1_000) * 1_000)
   const bracket = INCOME_TAX_PARAMETERS.brackets.find((item) => taxable <= item.upper)!
   const baseTax = Math.max(0, taxable * bracket.rate - bracket.deduction)
   return yen(Math.floor(baseTax * (1 + INCOME_TAX_PARAMETERS.reconstructionSurcharge) / 100) * 100)
@@ -67,10 +77,10 @@ export function estimateAnnualIncomeTax(annualSalary: number, annualSocialInsura
  * following year on the prior year's income; this assumes a stable salary and skips
  * 調整控除 / 非課税限度額 / 自治体の超過課税, so it runs slightly high.
  */
-export function estimateAnnualResidentTax(annualSalary: number, annualSocialInsurance: number): number {
+export function estimateAnnualResidentTax(annualSalary: number, annualSocialInsurance: number, dependentCount = 0): number {
   if (!Number.isFinite(annualSalary) || annualSalary <= 0) return 0
   const employmentIncome = salaryIncomeAmount(annualSalary)
-  const taxable = Math.max(0, Math.floor((employmentIncome - annualSocialInsurance - RESIDENT_TAX_PARAMETERS.basicDeduction) / 1_000) * 1_000)
+  const taxable = Math.max(0, Math.floor((employmentIncome - annualSocialInsurance - RESIDENT_TAX_PARAMETERS.basicDeduction - dependentResidentTaxDeduction(dependentCount)) / 1_000) * 1_000)
   return yen(taxable * RESIDENT_TAX_PARAMETERS.incomeRate + (taxable > 0 ? RESIDENT_TAX_PARAMETERS.perCapita : 0))
 }
 
@@ -107,15 +117,16 @@ export function calculateInsurance(
 
 export function calculatePayroll(input: PayrollInput): PayrollResult {
   const monthlySalary = Math.max(0, input.monthlySalary)
+  const dependentCount = input.dependentCount ?? 0
   const insurance = calculateInsurance(monthlySalary, input.prefecture, input.includeCare, true)
   const annualSalary = monthlySalary * 12
   const annualEmployeeInsurance = insurance.employee.total * 12
-  const annualIncomeTax = estimateAnnualIncomeTax(annualSalary, annualEmployeeInsurance)
+  const annualIncomeTax = estimateAnnualIncomeTax(annualSalary, annualEmployeeInsurance, dependentCount)
   const incomeTaxMonthly = yen(annualIncomeTax / 12)
 
   const residentTaxIsEstimated = input.residentTaxMonthlyOverride === null
   const residentTaxMonthly = residentTaxIsEstimated
-    ? yen(estimateAnnualResidentTax(annualSalary, annualEmployeeInsurance) / 12)
+    ? yen(estimateAnnualResidentTax(annualSalary, annualEmployeeInsurance, dependentCount) / 12)
     : yen(input.residentTaxMonthlyOverride ?? 0)
 
   const takeHomeMonthly = yen(monthlySalary - insurance.employee.total - incomeTaxMonthly - residentTaxMonthly)
@@ -133,81 +144,56 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   }
 }
 
-/** Combined corporate tax burden for a small/medium company (資本金1億円以下), standard rates. */
-export function estimateCorporateTax(taxableProfit: number): CorporateTaxResult {
-  const profit = Number.isFinite(taxableProfit) ? Math.round(taxableProfit) : 0
-  const p = CORPORATE_TAX_PARAMETERS
-  if (profit <= 0) {
-    return {
-      taxableProfit: profit,
-      nationalTax: 0,
-      localCorporateTax: 0,
-      inhabitantTax: p.inhabitantPerCapita,
-      enterpriseTax: 0,
-      total: p.inhabitantPerCapita,
-      effectiveRate: 0,
-      isDeficit: true,
-    }
-  }
-  const nationalTax = p.nationalLowRate * Math.min(profit, p.nationalLowCap)
-    + p.nationalHighRate * Math.max(0, profit - p.nationalLowCap)
-  const localCorporateTax = nationalTax * p.localCorporateRate
-  const inhabitantTax = nationalTax * p.inhabitantRate + p.inhabitantPerCapita
-  let enterpriseBase = 0
-  let lastUpper = 0
-  for (const bracket of p.enterpriseBrackets) {
-    const slice = clamp(profit - lastUpper, 0, bracket.upper - lastUpper)
-    enterpriseBase += slice * bracket.rate
-    lastUpper = bracket.upper
-    if (profit <= bracket.upper) break
-  }
-  const enterpriseTax = enterpriseBase * (1 + p.specialEnterpriseSurcharge)
-  const total = yen(nationalTax + localCorporateTax + inhabitantTax + enterpriseTax)
-  return {
-    taxableProfit: profit,
-    nationalTax: yen(nationalTax),
-    localCorporateTax: yen(localCorporateTax),
-    inhabitantTax: yen(inhabitantTax),
-    enterpriseTax: yen(enterpriseTax),
-    total,
-    effectiveRate: total / profit,
-    isDeficit: false,
-  }
-}
-
-export function calculateExecutiveScenario(
-  monthlyCompensation: number,
-  annualCompanyProfitBeforeCompensation: number,
+/**
+ * Executive (役員) compensation: same personal tax/insurance mechanics as regular payroll,
+ * but executives are not covered by employment insurance (雇用保険). No company profit or
+ * corporate tax involved — just the monthly salary, and its monthly/annual payment breakdown.
+ */
+export function calculateExecutiveCompensation(
+  annualCompensation: number,
   prefecture: string,
   includeCare: boolean,
   residentTaxAnnualOverride: number | null,
-): ExecutiveScenarioResult {
-  const compensation = Math.max(0, monthlyCompensation)
-  const insurance = calculateInsurance(compensation, prefecture, includeCare, false)
-  const annualCompensation = compensation * 12
-  const employeeInsuranceAnnual = insurance.employee.total * 12
-  const incomeTaxAnnual = estimateAnnualIncomeTax(annualCompensation, employeeInsuranceAnnual)
-  const residentTaxAnnual = residentTaxAnnualOverride === null
-    ? estimateAnnualResidentTax(annualCompensation, employeeInsuranceAnnual)
+  dependentCount = 0,
+): ExecutiveCompensationResult {
+  const annual = Math.max(0, annualCompensation)
+  const monthlyCompensation = Math.round(annual / 12)
+  const insurance = calculateInsurance(monthlyCompensation, prefecture, includeCare, false)
+  // Split out 健康保険（+介護・子育て拠出金）from 厚生年金 so the UI never has to guess what's bundled.
+  const healthInsuranceMonthly = insurance.employee.health + insurance.employee.care + insurance.employee.childSupport
+  const pensionInsuranceMonthly = insurance.employee.pension
+  const employeeInsuranceMonthly = insurance.employee.total
+  const employeeInsuranceAnnual = employeeInsuranceMonthly * 12
+  const incomeTaxAnnual = estimateAnnualIncomeTax(annual, employeeInsuranceAnnual, dependentCount)
+  const incomeTaxMonthly = yen(incomeTaxAnnual / 12)
+  const residentTaxIsEstimated = residentTaxAnnualOverride === null
+  const residentTaxAnnual = residentTaxIsEstimated
+    ? estimateAnnualResidentTax(annual, employeeInsuranceAnnual, dependentCount)
     : yen(residentTaxAnnualOverride)
-  const employerInsuranceAnnual = insurance.employer.total * 12
-  const companyCompensationCost = yen(annualCompensation + employerInsuranceAnnual)
-  const profitBeforeTax = Math.round(annualCompanyProfitBeforeCompensation - companyCompensationCost)
-  const corporateTax = estimateCorporateTax(profitBeforeTax)
-  const retainedAfterTax = Math.round(profitBeforeTax - corporateTax.total)
+  const residentTaxMonthly = yen(residentTaxAnnual / 12)
+  const employerInsuranceMonthly = insurance.employer.total
+  const employerInsuranceAnnual = employerInsuranceMonthly * 12
+  const takeHomeMonthly = yen(monthlyCompensation - employeeInsuranceMonthly - incomeTaxMonthly - residentTaxMonthly)
   return {
-    monthlyCompensation: yen(compensation),
-    annualCompensation: yen(annualCompensation),
+    monthlyCompensation: yen(monthlyCompensation),
+    annualCompensation: yen(annual),
+    healthInsuranceMonthly: yen(healthInsuranceMonthly),
+    healthInsuranceAnnual: yen(healthInsuranceMonthly * 12),
+    pensionInsuranceMonthly: yen(pensionInsuranceMonthly),
+    pensionInsuranceAnnual: yen(pensionInsuranceMonthly * 12),
+    employeeInsuranceMonthly: yen(employeeInsuranceMonthly),
     employeeInsuranceAnnual: yen(employeeInsuranceAnnual),
+    incomeTaxMonthly,
     incomeTaxAnnual,
+    residentTaxMonthly,
     residentTaxAnnual,
-    personalTakeHomeAnnual: yen(annualCompensation - employeeInsuranceAnnual - incomeTaxAnnual - residentTaxAnnual),
+    residentTaxIsEstimated,
+    takeHomeMonthly,
+    takeHomeAnnual: yen(annual - employeeInsuranceAnnual - incomeTaxAnnual - residentTaxAnnual),
+    employerInsuranceMonthly: yen(employerInsuranceMonthly),
     employerInsuranceAnnual: yen(employerInsuranceAnnual),
-    companyCompensationCost,
-    profitBeforeTax,
-    corporateTax,
-    retainedAfterTax,
-    isDeficit: retainedAfterTax < 0,
+    companyCostMonthly: yen(monthlyCompensation + employerInsuranceMonthly),
+    companyCostAnnual: yen(annual + employerInsuranceAnnual),
   }
 }
 

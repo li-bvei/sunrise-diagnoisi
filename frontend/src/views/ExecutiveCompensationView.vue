@@ -1,31 +1,61 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Plus, Delete } from '@element-plus/icons-vue'
 import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
 import FinancialDisclaimer from '@/components/practical/FinancialDisclaimer.vue'
+import MetricCard from '@/components/practical/MetricCard.vue'
 import { practicalToolMessages } from '@/data/practicalToolMessages'
 import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
 import { useSettingsStore } from '@/stores/settings'
-import { calculateExecutiveScenario, formatYen } from '@/utils/financialCalculator'
+import { calculateExecutiveCompensation, formatYen } from '@/utils/financialCalculator'
+import { formatIncomeManYen, parseIncomeManYenInput } from '@/utils/numericInput'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
-const form = reactive({ companyProfit: 12_000_000, age: 45, prefecture: '東京都', includeCare: true })
-const residentOverride = ref<number | null>(null)
-const compensations = ref([300_000, 500_000, 800_000])
+const form = reactive({ age: 45, prefecture: '東京都', includeCare: true, dependentCount: 0 })
 
-const scenarios = computed(() =>
-  compensations.value.map((value) =>
-    calculateExecutiveScenario(value, form.companyProfit, form.prefecture, form.includeCare, residentOverride.value),
-  ),
-)
-const money = (value: number) => formatYen(value, settings.locale)
-const percent = (value: number) => `${Math.round(value * 100)}%`
-
-function addScenario() { compensations.value.push(400_000) }
-function toggleResidentAdjust() {
-  residentOverride.value = residentOverride.value === null ? 0 : null
+// Annual compensation is the only input; monthly is derived from it.
+const annualCompensation = ref(6_000_000)
+const annualCompText = ref(formatIncomeManYen(annualCompensation.value))
+function updateAnnualComp(value: string) {
+  annualCompText.value = value.replace(/，/g, ',')
+  const parsed = parseIncomeManYenInput(value)
+  if (parsed !== null) annualCompensation.value = parsed
 }
+function formatAnnualComp() { annualCompText.value = formatIncomeManYen(annualCompensation.value) }
+
+// Resident tax override (annual), optional, edited in 万円.
+const residentOverrideActive = ref(false)
+const residentOverrideText = ref('0')
+const residentOverrideYen = computed(() => (
+  residentOverrideActive.value ? (parseIncomeManYenInput(residentOverrideText.value) ?? 0) : null
+))
+function toggleResidentAdjust() {
+  if (residentOverrideActive.value) {
+    residentOverrideActive.value = false
+    return
+  }
+  residentOverrideText.value = formatIncomeManYen(result.value.residentTaxAnnual)
+  residentOverrideActive.value = true
+}
+function updateResidentOverride(value: string) { residentOverrideText.value = value.replace(/，/g, ',') }
+function formatResidentOverride() { residentOverrideText.value = formatIncomeManYen(parseIncomeManYenInput(residentOverrideText.value) ?? 0) }
+
+const result = computed(() => calculateExecutiveCompensation(
+  annualCompensation.value, form.prefecture, form.includeCare, residentOverrideYen.value, form.dependentCount,
+))
+const money = (value: number) => formatYen(value, settings.locale)
+
+// 年度总费用：老板自己是公司实际出资人时，公司负担的那部分保险费本质上也是自己出的钱，
+// 所以给一个开关，让他能把公司负担并进"自己年度总费用"里一起看。
+const includeEmployerBurden = ref(false)
+const totalAnnualCost = computed(() => {
+  const health = result.value.healthInsuranceAnnual
+  const pension = result.value.pensionInsuranceAnnual
+  const employerBurden = includeEmployerBurden.value ? result.value.employerInsuranceAnnual : 0
+  const incomeTax = result.value.incomeTaxAnnual
+  const residentTax = result.value.residentTaxAnnual
+  return { health, pension, employerBurden, incomeTax, residentTax, total: health + pension + employerBurden + incomeTax + residentTax }
+})
 
 watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { immediate: true })
 </script>
@@ -38,9 +68,9 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
         <template #header>{{ copy.common.input }}</template>
         <el-form label-position="top">
           <div class="practical-form-grid">
-            <el-form-item :label="copy.executive.companyProfit">
-              <el-input-number v-model="form.companyProfit" :min="0" :step="1_000_000" :controls="false" />
-              <span class="input-suffix">{{ copy.common.yen }}</span>
+            <el-form-item :label="copy.executive.compensationAnnual">
+              <el-input :model-value="annualCompText" inputmode="decimal" autocomplete="off" placeholder="600" @input="updateAnnualComp" @blur="formatAnnualComp" />
+              <span class="input-suffix">{{ copy.common.wan }}</span>
             </el-form-item>
             <el-form-item :label="copy.common.age">
               <el-input-number v-model="form.age" :min="15" :max="99" />
@@ -51,78 +81,158 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
               </el-select>
             </el-form-item>
             <el-form-item :label="copy.executive.residentOverride">
-              <template v-if="residentOverride === null">
+              <template v-if="!residentOverrideActive">
                 <span class="resident-auto">{{ copy.common.estimated }}</span>
                 <button type="button" class="inline-btn" @click="toggleResidentAdjust">{{ copy.common.adjust }}</button>
               </template>
               <template v-else>
-                <el-input-number v-model="residentOverride" :min="0" :step="10_000" :controls="false" />
-                <span class="input-suffix">{{ copy.common.yen }}</span>
+                <el-input :model-value="residentOverrideText" inputmode="decimal" autocomplete="off" size="default" @input="updateResidentOverride" @blur="formatResidentOverride" />
+                <span class="input-suffix">{{ copy.common.wan }}</span>
                 <button type="button" class="inline-btn" @click="toggleResidentAdjust">{{ copy.common.reset }}</button>
               </template>
+            </el-form-item>
+            <el-form-item :label="copy.common.dependents">
+              <el-input-number v-model="form.dependentCount" :min="0" :max="10" />
+              <p class="field-help">{{ copy.common.dependentsHint }}</p>
             </el-form-item>
           </div>
           <el-checkbox v-model="form.includeCare">{{ copy.common.care }}</el-checkbox>
         </el-form>
       </el-card>
 
-      <div class="scenario-toolbar">
-        <h2>{{ copy.common.result }}</h2>
-        <el-button :icon="Plus" @click="addScenario">{{ copy.executive.add }}</el-button>
+      <div class="practical-metrics">
+        <MetricCard :label="copy.executive.monthlyCompensation" :value="money(result.monthlyCompensation)" tone="primary" />
+        <MetricCard :label="copy.executive.takeHomeAnnual" :value="money(result.takeHomeAnnual)" tone="success" />
       </div>
 
-      <div class="scenario-grid">
-        <el-card v-for="(scenario, index) in scenarios" :key="index" shadow="never" class="practical-panel scenario-card">
-          <template #header>
-            <div class="scenario-header">
-              <span>{{ copy.executive.scenario }} {{ index + 1 }}</span>
-              <el-button v-if="compensations.length > 1" text type="danger" :icon="Delete" @click="compensations.splice(index, 1)" />
-            </div>
-          </template>
-
-          <el-form-item :label="copy.executive.compensation">
-            <el-input-number v-model="compensations[index]" :min="0" :step="10_000" :controls="false" />
-            <span class="input-suffix">{{ copy.common.yen }}</span>
-          </el-form-item>
-
-          <div class="scenario-key">
-            <div><span>{{ copy.executive.personalTakeHome }}</span><strong>{{ money(scenario.personalTakeHomeAnnual) }}</strong></div>
-            <div><span>{{ copy.executive.companyCost }}</span><strong>{{ money(scenario.companyCompensationCost) }}</strong></div>
-            <div><span>{{ copy.executive.profitBeforeTax }}</span><strong :class="{ negative: scenario.profitBeforeTax < 0 }">{{ money(scenario.profitBeforeTax) }}</strong></div>
-            <div>
-              <span>{{ copy.executive.corporateTax }}</span>
-              <strong>{{ money(scenario.corporateTax.total) }}<em v-if="!scenario.corporateTax.isDeficit"> · {{ percent(scenario.corporateTax.effectiveRate) }}</em></strong>
-            </div>
-            <div class="scenario-retained" :class="{ deficit: scenario.isDeficit }">
-              <span>{{ copy.executive.retained }}</span>
-              <strong>
-                {{ money(scenario.retainedAfterTax) }}
-                <em v-if="scenario.isDeficit" class="deficit-badge">{{ copy.executive.deficit }}</em>
-              </strong>
-            </div>
+      <el-card shadow="never" class="practical-panel">
+        <template #header>
+          <div class="total-cost-header">
+            <span>{{ copy.executive.totalCostTitle }}</span>
+            <label class="switch-label">
+              <el-switch v-model="includeEmployerBurden" />
+              {{ copy.executive.includeEmployerBurden }}
+            </label>
           </div>
+        </template>
+        <div class="practical-breakdown">
+          <div><span>{{ copy.executive.incomeTax }}</span><strong>{{ money(totalAnnualCost.incomeTax) }}</strong></div>
+          <div><span>{{ copy.executive.residentTax }}</span><strong>{{ money(totalAnnualCost.residentTax) }}</strong></div>
+          <div><span>{{ copy.executive.health }}</span><strong>{{ money(totalAnnualCost.health) }}</strong></div>
+          <div><span>{{ copy.executive.pension }}</span><strong>{{ money(totalAnnualCost.pension) }}</strong></div>
+          <div v-if="includeEmployerBurden"><span>{{ copy.executive.employerBurdenLine }}</span><strong>{{ money(totalAnnualCost.employerBurden) }}</strong></div>
+          <div class="total"><span>{{ copy.executive.totalCost }}</span><strong>{{ money(totalAnnualCost.total) }}</strong></div>
+        </div>
+        <p class="panel-note">{{ includeEmployerBurden ? copy.executive.employerBurdenNote : copy.executive.personalOnlyNote }}</p>
+      </el-card>
 
-          <details class="scenario-details">
-            <summary>{{ copy.executive.personalDetail }}</summary>
-            <div class="mini-rows">
-              <div><span>{{ copy.executive.annualIncome }}</span><b>{{ money(scenario.annualCompensation) }}</b></div>
-              <div><span>{{ copy.executive.employeeInsurance }}</span><b>{{ money(scenario.employeeInsuranceAnnual) }}</b></div>
-              <div><span>{{ copy.executive.incomeTax }}</span><b>{{ money(scenario.incomeTaxAnnual) }}</b></div>
-              <div><span>{{ copy.executive.residentTax }}</span><b>{{ money(scenario.residentTaxAnnual) }}</b></div>
-              <div><span>{{ copy.executive.employerInsurance }}</span><b>{{ money(scenario.employerInsuranceAnnual) }}</b></div>
-            </div>
-          </details>
-          <details v-if="!scenario.corporateTax.isDeficit" class="scenario-details">
-            <summary>{{ copy.executive.corporateDetail }}</summary>
-            <div class="mini-rows">
-              <div><span>{{ copy.executive.nationalTax }}</span><b>{{ money(scenario.corporateTax.nationalTax) }}</b></div>
-              <div><span>{{ copy.executive.localCorporateTax }}</span><b>{{ money(scenario.corporateTax.localCorporateTax) }}</b></div>
-              <div><span>{{ copy.executive.inhabitantTax }}</span><b>{{ money(scenario.corporateTax.inhabitantTax) }}</b></div>
-              <div><span>{{ copy.executive.enterpriseTax }}</span><b>{{ money(scenario.corporateTax.enterpriseTax) }}</b></div>
-            </div>
-          </details>
-        </el-card>
-      </div>
+      <el-card shadow="never" class="practical-panel">
+        <template #header>{{ copy.executive.monthlyBreakdown }}</template>
+        <div class="payslip-wrap">
+          <table class="payslip-table">
+            <thead>
+              <tr>
+                <th>{{ copy.payslip.paymentItem }}</th>
+                <th class="amount">{{ copy.payslip.amount }}</th>
+                <th>{{ copy.payslip.deductionItem }}</th>
+                <th class="amount">{{ copy.payslip.amount }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{ copy.payslip.base }}</td>
+                <td class="amount">{{ money(result.monthlyCompensation) }}</td>
+                <td>{{ copy.executive.health }}</td>
+                <td class="amount">{{ money(result.healthInsuranceMonthly) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>{{ copy.executive.pension }}</td>
+                <td class="amount">{{ money(result.pensionInsuranceMonthly) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>{{ copy.executive.incomeTax }}</td>
+                <td class="amount">{{ money(result.incomeTaxMonthly) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>
+                  <span class="payslip-label-with-tag">
+                    {{ copy.executive.residentTax }}
+                    <em v-if="result.residentTaxIsEstimated" class="inline-tag">{{ copy.common.estimated }}</em>
+                  </span>
+                </td>
+                <td class="amount">{{ money(result.residentTaxMonthly) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="payslip-subtotal">
+                <td>{{ copy.payslip.totalPayment }}</td>
+                <td class="amount">{{ money(result.monthlyCompensation) }}</td>
+                <td>{{ copy.payslip.totalDeduction }}</td>
+                <td class="amount">{{ money(result.employeeInsuranceMonthly + result.incomeTaxMonthly + result.residentTaxMonthly) }}</td>
+              </tr>
+              <tr class="payslip-net">
+                <td colspan="3">{{ copy.payslip.netPay }}</td>
+                <td class="amount">{{ money(result.takeHomeMonthly) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </el-card>
+
+      <el-card shadow="never" class="practical-panel">
+        <template #header>{{ copy.executive.annualBreakdown }}</template>
+        <div class="payslip-wrap">
+          <table class="payslip-table">
+            <thead>
+              <tr>
+                <th>{{ copy.payslip.paymentItem }}</th>
+                <th class="amount">{{ copy.payslip.amount }}</th>
+                <th>{{ copy.payslip.deductionItem }}</th>
+                <th class="amount">{{ copy.payslip.amount }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{ copy.payslip.base }}</td>
+                <td class="amount">{{ money(result.annualCompensation) }}</td>
+                <td>{{ copy.executive.health }}</td>
+                <td class="amount">{{ money(result.healthInsuranceAnnual) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>{{ copy.executive.pension }}</td>
+                <td class="amount">{{ money(result.pensionInsuranceAnnual) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>{{ copy.executive.incomeTax }}</td>
+                <td class="amount">{{ money(result.incomeTaxAnnual) }}</td>
+              </tr>
+              <tr>
+                <td></td><td class="amount"></td>
+                <td>{{ copy.executive.residentTax }}</td>
+                <td class="amount">{{ money(result.residentTaxAnnual) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="payslip-subtotal">
+                <td>{{ copy.payslip.totalPayment }}</td>
+                <td class="amount">{{ money(result.annualCompensation) }}</td>
+                <td>{{ copy.payslip.totalDeduction }}</td>
+                <td class="amount">{{ money(result.employeeInsuranceAnnual + result.incomeTaxAnnual + result.residentTaxAnnual) }}</td>
+              </tr>
+              <tr class="payslip-net">
+                <td colspan="3">{{ copy.payslip.netPay }}</td>
+                <td class="amount">{{ money(result.takeHomeAnnual) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p v-if="result.residentTaxIsEstimated" class="panel-note">{{ copy.executive.residentHint }}</p>
+      </el-card>
 
       <el-alert type="info" :closable="false" show-icon :title="copy.executive.note" />
       <FinancialDisclaimer />
@@ -134,24 +244,9 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
 .inline-btn { margin-left: 10px; padding: 0; border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: 12px; cursor: pointer; }
 .inline-btn:hover { text-decoration: underline; text-underline-offset: 2px; }
 .resident-auto { color: var(--color-text-secondary); font-size: 13px; }
-.scenario-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 500; }
-.scenario-key { display: grid; gap: 0; margin-top: 6px; }
-.scenario-key > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--color-border-light); }
-.scenario-key > div:last-child { border-bottom: 0; }
-.scenario-key span { color: var(--color-text-secondary); font-size: 13px; }
-.scenario-key strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; text-align: right; font-variant-numeric: tabular-nums; }
-.scenario-key strong em { color: var(--color-text-secondary); font-style: normal; font-weight: 400; font-size: 12px; }
-.scenario-key strong.negative { color: var(--color-danger); }
-.scenario-retained { margin-top: 4px; padding: 14px 16px !important; border: 0 !important; border-radius: var(--radius-sm); background: var(--color-success-surface); }
-.scenario-retained strong { color: var(--color-success); font-size: 18px; }
-.scenario-retained.deficit { background: var(--color-danger-surface); }
-.scenario-retained.deficit strong { color: var(--color-danger); }
-.deficit-badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--color-danger); color: white; font-size: 11px; font-style: normal; font-weight: 600; }
-.scenario-details { margin-top: 12px; }
-.scenario-details summary { color: var(--color-primary); font-size: 13px; cursor: pointer; }
-.mini-rows { display: grid; gap: 0; margin-top: 8px; }
-.mini-rows > div { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--color-border-light); font-size: 13px; }
-.mini-rows > div:last-child { border-bottom: 0; }
-.mini-rows span { color: var(--color-text-secondary); }
-.mini-rows b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.inline-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--color-primary-light); color: var(--color-primary); font-size: 11px; font-style: normal; }
+.panel-note { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
+.field-help { margin: 7px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
+.total-cost-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
+.switch-label { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 13px; font-weight: 400; cursor: pointer; }
 </style>

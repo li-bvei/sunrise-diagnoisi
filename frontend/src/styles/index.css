@@ -85,6 +85,13 @@ button, input, textarea, select { font: inherit; }
 }
 .el-popper, .el-descriptions { font-family: var(--app-font-family); }
 .el-popper[role="tooltip"] { max-width: min(420px, calc(100vw - 32px)); line-height: 1.65; }
+/* The floating panel is two nested boxes: .el-popper carries the border + drop shadow,
+   its child (.el-select-dropdown, .el-dropdown-menu, the date-picker panel, ...) paints
+   the visible white background. .el-popper's own radius defaults to Element Plus's
+   hardcoded 4px while the inner box already follows --radius-sm via --el-border-radius-base,
+   so the two curves didn't match and the shadow read as spilling past the white corner.
+   Give the outer box the same radius so both boxes share one curve. */
+.el-popper { border-radius: var(--radius-sm); }
 button { color: inherit; }
 a { color: inherit; text-decoration: none; }
 p, h1, h2, h3 { margin-top: 0; }
@@ -231,11 +238,19 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .el-button--default:hover, .el-button--default:focus { border-color: var(--color-primary); background: var(--color-card); color: var(--color-primary); }
 .el-button.is-text { border-radius: 8px; }
 .el-card { border-radius: var(--radius-md); border-color: var(--color-border-light); box-shadow: var(--shadow-card) !important; }
+/* A real border, not a box-shadow ring: a border is part of the box's own edge, so it
+   is geometrically impossible for it to render past the box's rounded corners — no
+   shadow-blur/anti-aliasing ambiguity left to get wrong. box-sizing:border-box (set
+   globally) keeps the border from changing the element's outer footprint. */
 .el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
-  border-radius: var(--radius-sm); box-shadow: 0 0 0 1px var(--color-border) inset;
+  border-radius: var(--radius-sm); box-shadow: none !important;
+  border: 1px solid var(--color-border);
   background: var(--color-card);
+  overflow: hidden;
 }
-.el-input__wrapper.is-focus, .el-select__wrapper.is-focused { box-shadow: 0 0 0 2px var(--color-primary) inset !important; }
+.el-input__wrapper.is-focus, .el-select__wrapper.is-focused { border-color: var(--color-primary); }
+.el-select { border-radius: var(--radius-sm); }
+.el-input-number { border-radius: var(--radius-sm); }
 .el-input-number.is-without-controls .el-input__inner { text-align: left; }
 .el-tabs__item { font-weight: 400; }
 .el-tabs__active-bar { border-radius: 2px; }
@@ -811,6 +826,37 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .practical-breakdown .total { margin-top: 6px; padding: 17px 0 4px; color: var(--color-primary); }
 .practical-breakdown .total strong { font-size: 22px; }
 .practical-grade-note { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 20px; padding: 14px; border-radius: 9px; background: var(--color-primary-light); color: var(--color-primary-dark); font-size: 12px; }
+
+/* 給与明細書 style: a real two-column payslip table (支給 / 控除), not a card list —
+   deliberately more "printed form" than the rest of the Apple-flavoured UI, because
+   that's the point: it should read as a payslip, not another summary card. */
+.payslip-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.payslip-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 13px; }
+.payslip-table th, .payslip-table td { padding: 10px 14px; border: 1px solid var(--color-border-light); }
+.payslip-table thead th {
+  border-top: 0; background: #f5f5f7; color: var(--color-text-secondary);
+  font-size: 12px; font-weight: 600; text-align: left; white-space: nowrap;
+}
+.payslip-table thead th:first-child, .payslip-table thead th:nth-child(3) { border-left: 0; }
+.payslip-table thead th:last-child { border-right: 0; }
+.payslip-table tbody td, .payslip-table tfoot td {
+  color: var(--color-text); white-space: nowrap; border-left: 0; border-right: 0;
+}
+.payslip-table tbody tr:first-child td { border-top: 0; }
+.payslip-table td.amount, .payslip-table th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+.payslip-table tbody td:empty { background: #fbfbfd; }
+.payslip-table tfoot .payslip-subtotal td { border-top: 2px solid var(--color-text); background: #fafafa; font-weight: 600; }
+.payslip-table tfoot .payslip-net td {
+  border-top: 0; background: var(--color-success-surface); color: var(--color-success);
+  font-size: 16px; font-weight: 700; text-align: right;
+}
+.payslip-table tfoot .payslip-net td:first-child { text-align: left; color: var(--color-text); font-size: 13px; font-weight: 600; }
+.payslip-label-with-tag { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; white-space: normal; }
+.payslip-table .inline-input .el-input-number { width: 110px; }
+@media (max-width: 520px) {
+  .payslip-table { font-size: 12px; }
+  .payslip-table th, .payslip-table td { padding: 8px 10px; }
+}
 .practical-disclaimer { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #fbfcfc; color: var(--color-text-secondary); font-size: 12px; }
 .practical-disclaimer > .el-icon { flex: 0 0 auto; margin-top: 4px; color: var(--color-primary); }
 .practical-disclaimer p { margin-bottom: 7px; }
@@ -953,54 +999,6 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .record-actions .el-button { min-height: 42px; }
   .stay-sort { width: 100%; }
 }
-
-@page { size: A4 portrait; margin: 12mm; }
-@media print {
-  #app { display: none !important; }
-  body * { visibility: hidden !important; }
-  .el-overlay, .el-overlay *, .report-dialog, .report-dialog *, .diagnosis-report, .diagnosis-report * { visibility: visible !important; }
-  .el-overlay { position: static !important; background: white !important; }
-  .report-dialog { position: static !important; width: auto !important; margin: 0 !important; box-shadow: none !important; }
-  .report-dialog .el-dialog__header, .report-dialog .el-dialog__footer, .el-overlay-dialog { position: static !important; }
-  .report-dialog .el-dialog__header, .report-dialog .el-dialog__footer { display: none !important; }
-  .report-dialog .el-dialog__body, .report-page-background { padding: 0 !important; background: white !important; }
-  .diagnosis-report { width: 100% !important; padding: 0 !important; box-shadow: none !important; }
-  .report-card, .score-progress-chart, .breakdown-chart { break-inside: avoid; border-color: #777 !important; }
-  .score-segment.confirmed, .breakdown-track .confirmed { background: #555 !important; print-color-adjust: exact; }
-  a { color: black !important; text-decoration: underline; }
-}
-
-/* Applied via JS right before window.print() so the on-screen measurement used to
-   compute the fit-to-one-page zoom (see printReport in HighlySkilledView.vue) matches
-   what actually renders, then removed again on 'afterprint'. */
-.report-print-compact.diagnosis-report { font-size: 11px; }
-.report-print-compact .report-brand { padding-bottom: 8px; }
-.report-print-compact .report-brand h1 { font-size: 16px; margin: 2px 0 0; }
-.report-print-compact .report-card { margin-top: 8px; padding: 8px 10px; }
-.report-print-compact .report-card h2, .report-print-compact .report-card h3 { font-size: 12px; margin-bottom: 6px; }
-.report-print-compact .report-profile { gap: 4px; margin-bottom: 6px; }
-.report-print-compact .report-profile span { font-size: 8px; }
-.report-print-compact .report-profile strong { font-size: 10px; }
-.report-print-compact .report-status-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
-.report-print-compact .report-status-grid span { padding: 4px; font-size: 8px; }
-.report-print-compact .report-status-grid strong { font-size: 9px; }
-.report-print-compact .score-progress-chart, .report-print-compact .breakdown-chart { padding: 8px; }
-.report-print-compact .score-chart-number { margin-bottom: 6px; }
-.report-print-compact .score-chart-number strong { font-size: 22px; }
-.report-print-compact .score-chart-number > span { font-size: 12px; }
-.report-print-compact .score-scale { height: 12px; margin: 10px 0 6px; }
-.report-print-compact .score-progress-chart figcaption, .report-print-compact .breakdown-chart figcaption { font-size: 8px; margin-top: 4px; }
-.report-print-compact .breakdown-bar-row { grid-template-columns: 70px 1fr 40px; gap: 5px; margin: 4px 0; font-size: 9px; }
-.report-print-compact .breakdown-track { height: 8px; }
-.report-print-compact .report-breakdown { grid-template-columns: 1fr 1fr; gap: 0 14px; }
-.report-print-compact .report-breakdown > div { grid-template-columns: 1fr auto 60px; gap: 6px; padding: 3px 0; font-size: 9px; }
-.report-print-compact .university-assessment dl { gap: 3px 10px; }
-.report-print-compact .university-assessment dt, .report-print-compact .university-assessment dd { font-size: 8px; }
-.report-print-compact .university-assessment p { margin: 6px 0 0; padding: 6px; font-size: 9px; }
-.report-print-compact .report-recommendations { gap: 4px; }
-.report-print-compact .report-recommendations > div { grid-template-columns: 50px 1fr; gap: 6px; }
-.report-print-compact .report-recommendations p { font-size: 9px; }
-.report-print-compact .report-disclaimer { margin-top: 8px; padding-top: 6px; font-size: 7px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; }

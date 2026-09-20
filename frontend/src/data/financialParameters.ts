@@ -2,8 +2,8 @@ import type { StandardRemunerationGrade } from '@/types/financial'
 
 export const FINANCIAL_PARAMETER_META = {
   applicableYear: 2026,
-  updatedAt: '2026-09-09',
-  note: '基于协会社保一般被保险者、一般事业雇用保险、2026 年度所得税・住民税与中小法人标准税率的简易概算。',
+  updatedAt: '2026-09-20',
+  note: '基于协会社保一般被保险者、一般事业雇用保险与 2026 年度所得税・住民税的简易概算。',
   sources: [
     {
       label: '全国健康保険協会 令和8年度都道府県単位保険料率',
@@ -30,8 +30,8 @@ export const FINANCIAL_PARAMETER_META = {
       url: 'https://www.soumu.go.jp/main_sosiki/jichi_zeisei/czaisei/czaisei_seido/individual-inhabitant-tax.html',
     },
     {
-      label: '国税庁 No.5759 法人税の税率',
-      url: 'https://www.nta.go.jp/taxes/shiraberu/taxanswer/hojin/5759.htm',
+      label: '国税庁 No.1180 扶養控除',
+      url: 'https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1180.htm',
     },
   ],
 } as const
@@ -104,26 +104,12 @@ export const RESIDENT_TAX_PARAMETERS = {
   note: '住民税は前年所得を基準に翌年課税されます。ここでは同水準の年収が続くと仮定した概算で、調整控除・非課税限度額・自治体独自の超過課税は反映していません。',
 } as const
 
-export const CORPORATE_TAX_PARAMETERS = {
+export const DEPENDENT_DEDUCTION_PARAMETERS = {
   applicableYear: 2026,
-  scope: '資本金1億円以下の中小法人（普通法人）を前提とした概算。',
-  /** 法人税：年800万円以下15% / 超過分23.2% */
-  nationalLowRate: 0.15,
-  nationalLowCap: 8_000_000,
-  nationalHighRate: 0.232,
-  /** 地方法人税：法人税額の10.3% */
-  localCorporateRate: 0.103,
-  /** 法人住民税 法人税割（道府県+市町村の標準税率合算 概算7.0%）+ 均等割 */
-  inhabitantRate: 0.07,
-  inhabitantPerCapita: 70_000,
-  /** 法人事業税（所得割・標準税率）＋特別法人事業税（事業税額の37%） */
-  enterpriseBrackets: [
-    { upper: 4_000_000, rate: 0.035 },
-    { upper: 8_000_000, rate: 0.053 },
-    { upper: Number.POSITIVE_INFINITY, rate: 0.07 },
-  ],
-  specialEnterpriseSurcharge: 0.37,
-  note: '法人税・地方法人税・法人住民税・法人事業税・特別法人事業税を標準税率で概算した合算値です。繰越欠損金、税額控除、外形標準課税、自治体の超過税率、消費税は含みません。赤字の場合は法人住民税の均等割のみを表示します。',
+  /** 一般の控除対象扶養親族（16歳以上）1人あたりの控除額 */
+  incomeTaxPerDependent: 380_000,
+  residentTaxPerDependent: 330_000,
+  note: '一般の控除対象扶養親族（16歳以上）を前提とした一律控除です。特定扶養親族（19〜22歳）・老人扶養親族（70歳以上）・配偶者控除／配偶者特別控除は金額が異なり、本ツールには含まれていません。',
 } as const
 
 export const INCOME_TAX_PARAMETERS = {

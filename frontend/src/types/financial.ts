@@ -22,6 +22,8 @@ export interface PayrollInput {
   includeCare: boolean
   /** Optional manual override for monthly resident tax. When null the tool estimates it. */
   residentTaxMonthlyOverride: number | null
+  /** Count of general dependents (一般の控除対象扶養親族, 16歳以上). Defaults to 0. */
+  dependentCount?: number
 }
 
 export interface PayrollResult {
@@ -39,28 +41,24 @@ export interface PayrollResult {
   annualTakeHome: number
 }
 
-export interface CorporateTaxResult {
-  taxableProfit: number
-  nationalTax: number
-  localCorporateTax: number
-  inhabitantTax: number
-  enterpriseTax: number
-  total: number
-  effectiveRate: number
-  isDeficit: boolean
-}
-
-export interface ExecutiveScenarioResult {
+export interface ExecutiveCompensationResult {
   monthlyCompensation: number
   annualCompensation: number
+  healthInsuranceMonthly: number
+  healthInsuranceAnnual: number
+  pensionInsuranceMonthly: number
+  pensionInsuranceAnnual: number
+  employeeInsuranceMonthly: number
   employeeInsuranceAnnual: number
+  incomeTaxMonthly: number
   incomeTaxAnnual: number
+  residentTaxMonthly: number
   residentTaxAnnual: number
-  personalTakeHomeAnnual: number
+  residentTaxIsEstimated: boolean
+  takeHomeMonthly: number
+  takeHomeAnnual: number
+  employerInsuranceMonthly: number
   employerInsuranceAnnual: number
-  companyCompensationCost: number
-  profitBeforeTax: number
-  corporateTax: CorporateTaxResult
-  retainedAfterTax: number
-  isDeficit: boolean
+  companyCostMonthly: number
+  companyCostAnnual: number
 }
