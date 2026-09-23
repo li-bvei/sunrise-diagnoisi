@@ -9287,7 +9287,8 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   },
   {
     "id": "trap-restriction-numbers",
@@ -9379,7 +9380,8 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   },
   {
     "id": "trap-license-numbers",
@@ -9479,7 +9481,8 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   },
   {
     "id": "trap-wording-logic",
@@ -9703,7 +9706,8 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   },
   {
     "id": "trap-repeat-mistakes",
@@ -9819,7 +9823,8 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   },
   {
     "id": "trap-linked-network",
@@ -9861,6 +9866,7 @@
           }
         ]
       }
-    ]
+    ],
+    "examSprint": true
   }
 ]

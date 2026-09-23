@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowUp, Search, Star, WarningFilled } from '@element-plus/icons-vue'
 import TakkenBilingualText from '@/components/takken/TakkenBilingualText.vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
@@ -10,10 +11,23 @@ import { classifyTakkenTag, takkenTagLabel, type TakkenCategory } from '@/utils/
 
 const topics = rawTopics as TakkenTopic[]
 const allTags = topics.map((topic) => topic.tag)
+const sprintTopicCount = topics.filter((topic) => topic.examSprint).length
 
 const selectedCategory = ref<TakkenCategory | null>(null)
 const selectedTag = ref<string | null>(null)
 const searchKeyword = ref('')
+
+const route = useRoute()
+const router = useRouter()
+// "考前冲刺" is its own bookmarkable place (?sprint=1), not just a filter you have to
+// re-discover each time — most topics already contain a "trap" callout, so filtering on that
+// wouldn't narrow anything down; this flag marks the small set of condensed, multi-item cram
+// summaries (number traps, wording traps, repeated-mistake lists, linked-topic networks) that
+// are actually meant for fast pre-exam scanning.
+const sprintOnly = ref(route.query.sprint === '1')
+watch(sprintOnly, (value) => {
+  void router.replace({ query: { ...route.query, sprint: value ? '1' : undefined } })
+})
 
 function matchesKeyword(topic: TakkenTopic, keyword: string): boolean {
   const haystack = [topic.title.zh, topic.title.ja, topic.tag, takkenTagLabel(topic.tag), topic.source]
@@ -26,6 +40,7 @@ function matchesKeyword(topic: TakkenTopic, keyword: string): boolean {
 const filteredTopics = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
   return topics.filter((topic) => {
+    if (sprintOnly.value && !topic.examSprint) return false
     if (selectedTag.value && topic.tag !== selectedTag.value) return false
     if (!selectedTag.value && selectedCategory.value && classifyTakkenTag(topic.tag) !== selectedCategory.value) return false
     if (keyword && !matchesKeyword(topic, keyword)) return false
@@ -34,7 +49,7 @@ const filteredTopics = computed(() => {
 })
 
 const currentIndex = ref(0)
-watch([selectedCategory, selectedTag, searchKeyword], () => { currentIndex.value = 0 })
+watch([selectedCategory, selectedTag, searchKeyword, sprintOnly], () => { currentIndex.value = 0 })
 
 const currentTopic = computed<TakkenTopic | undefined>(() => filteredTopics.value[currentIndex.value])
 const progressLabel = computed(() => (filteredTopics.value.length === 0 ? '' : `${currentIndex.value + 1} / ${filteredTopics.value.length}`))
@@ -64,11 +79,18 @@ function backToTop() {
 
 <template>
   <div class="page-surface takken-page">
-    <section class="page-hero compact">
-      <div class="container">
-        <span class="eyebrow">宅建考试刷题</span>
-        <h1>宅建考点速查</h1>
-        <p>考前复习手册——像刷题一样一条条翻，日语原文在上、中文解析在下，考试只会出日语，先让眼睛熟悉它。</p>
+    <section class="page-hero compact takken-hero">
+      <div class="container takken-hero-inner">
+        <div class="takken-hero-text">
+          <span class="eyebrow">宅建考试刷题</span>
+          <h1>宅建考点速查</h1>
+        </div>
+        <div class="takken-hero-actions">
+          <el-button :type="sprintOnly ? 'primary' : 'default'" size="large" @click="sprintOnly = !sprintOnly">
+            🔥 考前冲刺专项（{{ sprintTopicCount }}）
+          </el-button>
+          <span class="takken-hero-status">数字陷阱・文字陷阱・反复出错清单・关联考点网络</span>
+        </div>
       </div>
     </section>
 

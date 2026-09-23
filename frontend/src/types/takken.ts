@@ -105,6 +105,11 @@ export interface TakkenTopicSection {
 export interface TakkenTopic {
   id: string
   isNew?: boolean
+  /** Marks a condensed, multi-item cram-review topic (number-trap tables, repeated-mistake lists,
+   * linked-topic networks) as opposed to the default "one exam question, one lesson" topic. Most
+   * topics already contain a `trap` block, so that alone isn't a useful "考前冲刺" filter — this
+   * flag is what actually powers the dedicated 考前冲刺 view. */
+  examSprint?: boolean
   tag: string
   title: TakkenBilingualText
   source: string
