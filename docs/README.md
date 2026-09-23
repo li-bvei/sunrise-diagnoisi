@@ -9,6 +9,7 @@
 3. [`../DEVELOPMENT.md`](../DEVELOPMENT.md)：较详细的业务规则、数据边界和维护约束；其中部分旧计划仍需以后续代码为准。
 4. [`../SUBDIRECTORY_DEPLOYMENT.md`](../SUBDIRECTORY_DEPLOYMENT.md)：子目录部署说明；当前已知与 Vite 配置存在不一致，不能单独作为事实来源。
 5. [`../frontend/src/data/universities/README.md`](../frontend/src/data/universities/README.md)：大学名单数据的生成、别名和复核规则。
+6. [`TAKKEN_DATA_WORKFLOW.md`](./TAKKEN_DATA_WORKFLOW.md)：宅建错题库/考点速查怎么加内容、怎么上传部署——改这两份数据前必读，不要直接整份读取 JSON。
 
 ## 文档事实来源优先级
 

@@ -191,7 +191,7 @@ SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 - `/tools/salary`：工资、社保与到手金额（含标准报酬等级，自动概算住民税）
 - `/tools/executive-compensation`：役员报酬模拟（输入年工资，折算月工资并给出月度/年度支付明细，不涉及公司利润或法人税）
 - `/tools/stay-days`：在日天数与出入境记录
-- `/tools/takken`、`/tools/takken-notes`、`/tools/takken-analysis`：宅建刷题、考点速查与薄弱分析
+- `/tools/takken`、`/tools/takken-notes`、`/tools/takken-analysis`：宅建刷题、考点速查与薄弱分析（数据维护方式见 [`docs/TAKKEN_DATA_WORKFLOW.md`](docs/TAKKEN_DATA_WORKFLOW.md)）
 - `/tools/highly-skilled-pr`、`/tools/j-skip`：兼容旧地址，重定向到高度人才计算器
 - `/tools/payroll`、`/tools/standard-remuneration`：兼容旧地址，重定向到 `/tools/salary`
 - `/tools/pension`：已下线，重定向到 `/tools`（旧年金简易估算可靠性不足，暂时移除）
