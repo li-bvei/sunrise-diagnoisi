@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { Download } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
 import FinancialDisclaimer from '@/components/practical/FinancialDisclaimer.vue'
 import MetricCard from '@/components/practical/MetricCard.vue'
@@ -8,6 +10,7 @@ import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
 import { useSettingsStore } from '@/stores/settings'
 import { calculateExecutiveCompensation, formatYen } from '@/utils/financialCalculator'
 import { formatIncomeManYen, parseIncomeManYenInput } from '@/utils/numericInput'
+import { downloadCsv, payslipToCsv } from '@/utils/csv'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
@@ -58,6 +61,54 @@ const totalAnnualCost = computed(() => {
 })
 
 watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { immediate: true })
+
+function localDateStamp(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = `${now.getMonth() + 1}`.padStart(2, '0')
+  const d = `${now.getDate()}`.padStart(2, '0')
+  return `${y}${m}${d}`
+}
+
+const payslipHeaders = computed((): [string, string, string, string] => [
+  copy.value.payslip.paymentItem, copy.value.payslip.amount, copy.value.payslip.deductionItem, copy.value.payslip.amount,
+])
+
+function downloadMonthlyPayslip() {
+  const csv = payslipToCsv(
+    payslipHeaders.value,
+    [{ label: copy.value.payslip.base, value: result.value.monthlyCompensation }],
+    [
+      { label: copy.value.executive.health, value: result.value.healthInsuranceMonthly },
+      { label: copy.value.executive.pension, value: result.value.pensionInsuranceMonthly },
+      { label: copy.value.executive.incomeTax, value: result.value.incomeTaxMonthly },
+      { label: copy.value.executive.residentTax, value: result.value.residentTaxMonthly },
+    ],
+    copy.value.payslip.totalPayment, result.value.monthlyCompensation,
+    copy.value.payslip.totalDeduction, result.value.employeeInsuranceMonthly + result.value.incomeTaxMonthly + result.value.residentTaxMonthly,
+    copy.value.payslip.netPay, result.value.takeHomeMonthly,
+  )
+  downloadCsv(`sunrise-executive-payslip-monthly-${localDateStamp()}.csv`, csv)
+  ElMessage.success(copy.value.payslip.downloaded)
+}
+
+function downloadAnnualPayslip() {
+  const csv = payslipToCsv(
+    payslipHeaders.value,
+    [{ label: copy.value.payslip.base, value: result.value.annualCompensation }],
+    [
+      { label: copy.value.executive.health, value: result.value.healthInsuranceAnnual },
+      { label: copy.value.executive.pension, value: result.value.pensionInsuranceAnnual },
+      { label: copy.value.executive.incomeTax, value: result.value.incomeTaxAnnual },
+      { label: copy.value.executive.residentTax, value: result.value.residentTaxAnnual },
+    ],
+    copy.value.payslip.totalPayment, result.value.annualCompensation,
+    copy.value.payslip.totalDeduction, result.value.employeeInsuranceAnnual + result.value.incomeTaxAnnual + result.value.residentTaxAnnual,
+    copy.value.payslip.netPay, result.value.takeHomeAnnual,
+  )
+  downloadCsv(`sunrise-executive-payslip-annual-${localDateStamp()}.csv`, csv)
+  ElMessage.success(copy.value.payslip.downloaded)
+}
 </script>
 
 <template>
@@ -107,7 +158,7 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
 
       <el-card shadow="never" class="practical-panel">
         <template #header>
-          <div class="total-cost-header">
+          <div class="panel-header-row">
             <span>{{ copy.executive.totalCostTitle }}</span>
             <label class="switch-label">
               <el-switch v-model="includeEmployerBurden" />
@@ -127,7 +178,12 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
       </el-card>
 
       <el-card shadow="never" class="practical-panel">
-        <template #header>{{ copy.executive.monthlyBreakdown }}</template>
+        <template #header>
+          <div class="panel-header-row">
+            <span>{{ copy.executive.monthlyBreakdown }}</span>
+            <el-button size="small" :icon="Download" @click="downloadMonthlyPayslip">{{ copy.payslip.download }}</el-button>
+          </div>
+        </template>
         <div class="payslip-wrap">
           <table class="payslip-table">
             <thead>
@@ -183,7 +239,12 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
       </el-card>
 
       <el-card shadow="never" class="practical-panel">
-        <template #header>{{ copy.executive.annualBreakdown }}</template>
+        <template #header>
+          <div class="panel-header-row">
+            <span>{{ copy.executive.annualBreakdown }}</span>
+            <el-button size="small" :icon="Download" @click="downloadAnnualPayslip">{{ copy.payslip.download }}</el-button>
+          </div>
+        </template>
         <div class="payslip-wrap">
           <table class="payslip-table">
             <thead>
@@ -247,6 +308,6 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
 .inline-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--color-primary-light); color: var(--color-primary); font-size: 11px; font-style: normal; }
 .panel-note { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .field-help { margin: 7px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
-.total-cost-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
+.panel-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
 .switch-label { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 13px; font-weight: 400; cursor: pointer; }
 </style>

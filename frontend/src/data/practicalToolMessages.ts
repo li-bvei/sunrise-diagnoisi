@@ -12,7 +12,7 @@ export const practicalToolMessages = {
     payslip: {
       paymentItem: '支给项目', amount: '金额', deductionItem: '控除项目',
       totalPayment: '支给合计', totalDeduction: '控除合计', netPay: '差引支给额（实际到手）',
-      base: '基本给',
+      base: '基本给', download: '下载 CSV', downloaded: 'CSV 已下载。',
     },
     salary: {
       eyebrow: '收入与社会保险',
@@ -69,7 +69,7 @@ export const practicalToolMessages = {
     payslip: {
       paymentItem: '支給項目', amount: '金額', deductionItem: '控除項目',
       totalPayment: '支給合計', totalDeduction: '控除合計', netPay: '差引支給額（手取り）',
-      base: '基本給',
+      base: '基本給', download: 'CSVをダウンロード', downloaded: 'CSVをダウンロードしました。',
     },
     salary: {
       eyebrow: '収入・社会保険',

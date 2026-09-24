@@ -11,6 +11,7 @@ const bundled = await build({
     contents: `
       export * from './src/utils/financialCalculator.ts'
       export * from './src/utils/stayCalculator.ts'
+      export * from './src/utils/csv.ts'
       export * from './src/data/financialParameters.ts'
     `,
     resolveDir: resolve('.'),
@@ -225,6 +226,30 @@ test('salary and executive breakdowns render as a real 給与明細 payslip tabl
   }
 })
 
+test('the executive view offers a separate CSV download for the monthly and the annual breakdown table', () => {
+  const executiveView = read('../src/views/ExecutiveCompensationView.vue')
+  assert.match(executiveView, /import \{ downloadCsv, payslipToCsv \} from '@\/utils\/csv'/)
+  assert.match(executiveView, /@click="downloadMonthlyPayslip"/)
+  assert.match(executiveView, /@click="downloadAnnualPayslip"/)
+
+  // each download must be built from that table's own figures, not a shared/mixed-up call
+  const monthlyFn = executiveView.slice(
+    executiveView.indexOf('function downloadMonthlyPayslip'),
+    executiveView.indexOf('function downloadAnnualPayslip'),
+  )
+  const annualFn = executiveView.slice(
+    executiveView.indexOf('function downloadAnnualPayslip'),
+    executiveView.indexOf('</script>'),
+  )
+  for (const fn of [monthlyFn, annualFn]) assert.ok(fn.length > 0)
+  assert.match(monthlyFn, /healthInsuranceMonthly/)
+  assert.match(monthlyFn, /takeHomeMonthly/)
+  assert.doesNotMatch(monthlyFn, /healthInsuranceAnnual|takeHomeAnnual/)
+  assert.match(annualFn, /healthInsuranceAnnual/)
+  assert.match(annualFn, /takeHomeAnnual/)
+  assert.doesNotMatch(annualFn, /healthInsuranceMonthly|takeHomeMonthly/)
+})
+
 test('the focus ring on inputs/selects is a real border, not a box-shadow ring, so it cannot visually exceed the rounded box', () => {
   const stylesSource = read('../src/styles/index.css')
   const wrapperRuleMatch = stylesSource.match(/\.el-input__wrapper, \.el-select__wrapper, \.el-textarea__inner \{[^}]*\}/)
@@ -248,4 +273,36 @@ test('the dropdown popper and its white panel share one border-radius (the shado
   // own hardcoded 4px default instead, the shadow reads as spilling past the rounded
   // white corner because the two nested boxes disagree on the curve.
   assert.match(stylesSource, /\.el-popper \{ border-radius: var\(--radius-sm\); \}/)
+})
+
+test('payslipToCsv mirrors the on-screen payslip table (payment/deduction side by side, subtotal, net pay)', () => {
+  const csv = runtime.payslipToCsv(
+    ['支给项目', '金额', '控除项目', '金额'],
+    [{ label: '基本给', value: 500_000 }],
+    [
+      { label: '健康保险', value: 29_250 },
+      { label: '厚生年金', value: 45_750 },
+      { label: '所得税', value: 15_350 },
+      { label: '住民税', value: 25_667 },
+    ],
+    '支给合计', 500_000,
+    '控除合计', 116_017,
+    '差引支给额（实际到手）', 383_983,
+  )
+  assert.match(csv, /^﻿/)
+  const lines = csv.slice(1).split('\n')
+  // header + 4 body rows (payment padded to the longer deduction side) + subtotal + net = 7 lines
+  assert.equal(lines.length, 7)
+  assert.equal(lines[0], '"支给项目","金额","控除项目","金额"')
+  assert.equal(lines[1], '"基本给","500000","健康保险","29250"')
+  // payment side is blank once its single row is used, deduction side keeps listing
+  assert.equal(lines[2], '"","","厚生年金","45750"')
+  assert.equal(lines[3], '"","","所得税","15350"')
+  assert.equal(lines[4], '"","","住民税","25667"')
+  assert.equal(lines[5], '"支给合计","500000","控除合计","116017"')
+  assert.equal(lines[6], '"差引支给额（实际到手）","","","383983"')
+
+  // embedded quote characters must still be escaped per RFC 4180
+  const escaped = runtime.payslipToCsv(['a', 'b', 'c', 'd'], [{ label: 'x "y"', value: 1 }], [], 't', 1, 'u', 0, 'n', 1)
+  assert.match(escaped, /""y""/)
 })
