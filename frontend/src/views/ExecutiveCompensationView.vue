@@ -6,11 +6,12 @@ import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
 import FinancialDisclaimer from '@/components/practical/FinancialDisclaimer.vue'
 import MetricCard from '@/components/practical/MetricCard.vue'
 import { practicalToolMessages } from '@/data/practicalToolMessages'
-import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
+import { FINANCIAL_DISCLAIMER, PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
 import { useSettingsStore } from '@/stores/settings'
 import { calculateExecutiveCompensation, formatYen } from '@/utils/financialCalculator'
 import { formatIncomeManYen, parseIncomeManYenInput } from '@/utils/numericInput'
-import { downloadCsv, payslipToCsv } from '@/utils/csv'
+import { downloadCsv, payslipToCsv, type PayslipData } from '@/utils/csv'
+import { downloadPayslipPdf } from '@/utils/payslipPdf'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
@@ -74,40 +75,80 @@ const payslipHeaders = computed((): [string, string, string, string] => [
   copy.value.payslip.paymentItem, copy.value.payslip.amount, copy.value.payslip.deductionItem, copy.value.payslip.amount,
 ])
 
-function downloadMonthlyPayslip() {
-  const csv = payslipToCsv(
-    payslipHeaders.value,
-    [{ label: copy.value.payslip.base, value: result.value.monthlyCompensation }],
-    [
+// The two payslip tables as plain data. The screen table, the CSV and the PDF all describe
+// the same figures; each builder only ever reads its own (monthly or annual) fields.
+function buildMonthlyPayslip(): PayslipData {
+  return {
+    title: `${copy.value.executive.title} · ${copy.value.executive.monthlyBreakdown}`,
+    headers: payslipHeaders.value,
+    payments: [{ label: copy.value.payslip.base, value: result.value.monthlyCompensation }],
+    deductions: [
       { label: copy.value.executive.health, value: result.value.healthInsuranceMonthly },
       { label: copy.value.executive.pension, value: result.value.pensionInsuranceMonthly },
       { label: copy.value.executive.incomeTax, value: result.value.incomeTaxMonthly },
       { label: copy.value.executive.residentTax, value: result.value.residentTaxMonthly },
     ],
-    copy.value.payslip.totalPayment, result.value.monthlyCompensation,
-    copy.value.payslip.totalDeduction, result.value.employeeInsuranceMonthly + result.value.incomeTaxMonthly + result.value.residentTaxMonthly,
-    copy.value.payslip.netPay, result.value.takeHomeMonthly,
-  )
-  downloadCsv(`sunrise-executive-payslip-monthly-${localDateStamp()}.csv`, csv)
-  ElMessage.success(copy.value.payslip.downloaded)
+    totalPaymentLabel: copy.value.payslip.totalPayment, totalPayment: result.value.monthlyCompensation,
+    totalDeductionLabel: copy.value.payslip.totalDeduction,
+    totalDeduction: result.value.employeeInsuranceMonthly + result.value.incomeTaxMonthly + result.value.residentTaxMonthly,
+    netPayLabel: copy.value.payslip.netPay, netPay: result.value.takeHomeMonthly,
+  }
 }
 
-function downloadAnnualPayslip() {
-  const csv = payslipToCsv(
-    payslipHeaders.value,
-    [{ label: copy.value.payslip.base, value: result.value.annualCompensation }],
-    [
+function buildAnnualPayslip(): PayslipData {
+  return {
+    title: `${copy.value.executive.title} · ${copy.value.executive.annualBreakdown}`,
+    headers: payslipHeaders.value,
+    payments: [{ label: copy.value.payslip.base, value: result.value.annualCompensation }],
+    deductions: [
       { label: copy.value.executive.health, value: result.value.healthInsuranceAnnual },
       { label: copy.value.executive.pension, value: result.value.pensionInsuranceAnnual },
       { label: copy.value.executive.incomeTax, value: result.value.incomeTaxAnnual },
       { label: copy.value.executive.residentTax, value: result.value.residentTaxAnnual },
     ],
-    copy.value.payslip.totalPayment, result.value.annualCompensation,
-    copy.value.payslip.totalDeduction, result.value.employeeInsuranceAnnual + result.value.incomeTaxAnnual + result.value.residentTaxAnnual,
-    copy.value.payslip.netPay, result.value.takeHomeAnnual,
-  )
-  downloadCsv(`sunrise-executive-payslip-annual-${localDateStamp()}.csv`, csv)
-  ElMessage.success(copy.value.payslip.downloaded)
+    totalPaymentLabel: copy.value.payslip.totalPayment, totalPayment: result.value.annualCompensation,
+    totalDeductionLabel: copy.value.payslip.totalDeduction,
+    totalDeduction: result.value.employeeInsuranceAnnual + result.value.incomeTaxAnnual + result.value.residentTaxAnnual,
+    netPayLabel: copy.value.payslip.netPay, netPay: result.value.takeHomeAnnual,
+  }
+}
+
+const issueDate = () => localDateStamp().replace(/^(\d{4})(\d{2})(\d{2})$/, '$1/$2/$3')
+
+const pdfBusy = ref<'monthly' | 'annual' | null>(null)
+
+async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf') {
+  const data = kind === 'monthly' ? buildMonthlyPayslip() : buildAnnualPayslip()
+  const filename = `sunrise-executive-payslip-${kind}-${localDateStamp()}`
+  if (format === 'csv') {
+    downloadCsv(`${filename}.csv`, payslipToCsv(data))
+    ElMessage.success(copy.value.payslip.downloaded)
+    return
+  }
+  if (pdfBusy.value) return
+  pdfBusy.value = kind
+  try {
+    await downloadPayslipPdf(`${filename}.pdf`, {
+      data,
+      brand: settings.dictionary.brand,
+      format: money,
+      metaLines: [
+        `${copy.value.executive.compensationAnnual}：${money(result.value.annualCompensation)}`,
+        `${copy.value.common.prefecture}：${form.prefecture}　${copy.value.common.dependents}：${form.dependentCount}`,
+        issueDate(),
+      ],
+      footnotes: [
+        ...(result.value.residentTaxIsEstimated ? [copy.value.executive.residentHint] : []),
+        copy.value.executive.note,
+        FINANCIAL_DISCLAIMER[settings.locale],
+      ],
+    })
+    ElMessage.success(copy.value.payslip.pdfDownloaded)
+  } catch {
+    ElMessage.error(copy.value.payslip.pdfFailed)
+  } finally {
+    pdfBusy.value = null
+  }
 }
 </script>
 
@@ -181,7 +222,10 @@ function downloadAnnualPayslip() {
         <template #header>
           <div class="panel-header-row">
             <span>{{ copy.executive.monthlyBreakdown }}</span>
-            <el-button size="small" :icon="Download" @click="downloadMonthlyPayslip">{{ copy.payslip.download }}</el-button>
+            <span class="panel-actions no-print">
+              <el-button size="small" :icon="Download" :loading="pdfBusy === 'monthly'" @click="downloadPayslip('monthly', 'pdf')">{{ copy.payslip.downloadPdf }}</el-button>
+              <el-button size="small" :icon="Download" @click="downloadPayslip('monthly', 'csv')">{{ copy.payslip.download }}</el-button>
+            </span>
           </div>
         </template>
         <div class="payslip-wrap">
@@ -242,7 +286,10 @@ function downloadAnnualPayslip() {
         <template #header>
           <div class="panel-header-row">
             <span>{{ copy.executive.annualBreakdown }}</span>
-            <el-button size="small" :icon="Download" @click="downloadAnnualPayslip">{{ copy.payslip.download }}</el-button>
+            <span class="panel-actions no-print">
+              <el-button size="small" :icon="Download" :loading="pdfBusy === 'annual'" @click="downloadPayslip('annual', 'pdf')">{{ copy.payslip.downloadPdf }}</el-button>
+              <el-button size="small" :icon="Download" @click="downloadPayslip('annual', 'csv')">{{ copy.payslip.download }}</el-button>
+            </span>
           </div>
         </template>
         <div class="payslip-wrap">
@@ -309,5 +356,7 @@ function downloadAnnualPayslip() {
 .panel-note { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .field-help { margin: 7px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .panel-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
+.panel-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.panel-actions .el-button { margin-left: 0; }
 .switch-label { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 13px; font-weight: 400; cursor: pointer; }
 </style>

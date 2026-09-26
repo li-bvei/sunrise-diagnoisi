@@ -239,10 +239,11 @@ test('date pickers use stable values and numeric Chinese/Japanese calendar label
   assert.match(calculatorSource, /calculateAge/)
 })
 
-test('print/PDF export was removed and charts remain visible at all sizes', () => {
-  assert.doesNotMatch(stylesSource, /@media print/)
-  assert.doesNotMatch(stylesSource, /@page \{ size: A4 portrait/)
+test('the report print/PDF machinery stays removed and charts remain visible at all sizes', () => {
+  // the old per-report print flow (fit-to-one-page zoom hack + report-print-compact) must not come back;
+  // a small generic print sheet (see the print-layout test in practical-tools) is a different thing
   assert.doesNotMatch(stylesSource, /report-print-compact/)
+  assert.doesNotMatch(stylesSource, /\.report-dialog[^{]*\{[^}]*visibility/)
   assert.match(stylesSource, /\.result-chart-grid/)
   assert.doesNotMatch(viewSource, /printReport|window\.print\(\)/)
   const rentalViewSource = readFileSync(new URL('../src/views/RentalCostView.vue', import.meta.url), 'utf8')

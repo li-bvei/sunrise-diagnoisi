@@ -1000,6 +1000,49 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .stay-sort { width: 100%; }
 }
 
+/* The sheet that utils/payslipPdf.ts rasterises into the downloaded PDF. It is mounted on
+   <body> outside the app, parked off-screen, and fixed at A4 width (210mm ≈ 794px at 96dpi)
+   so the PDF layout never depends on the window size. */
+.payslip-pdf-sheet {
+  position: fixed; top: 0; left: -10000px; width: 794px; box-sizing: border-box;
+  padding: 44px 44px 40px; background: #fff; color: var(--color-text);
+  font-family: var(--app-font-family); line-height: 1.5;
+}
+.payslip-pdf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 2px solid var(--color-text); }
+.payslip-pdf-head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.payslip-pdf-brand { color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; }
+.payslip-pdf-meta { margin: 14px 0 18px; }
+.payslip-pdf-meta p { margin: 0; color: var(--color-text-secondary); font-size: 12px; }
+.payslip-pdf-sheet .payslip-wrap { overflow: visible; }
+.payslip-pdf-sheet .payslip-table { min-width: 0; font-size: 13px; }
+.payslip-pdf-notes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
+.payslip-pdf-notes p { margin: 0 0 4px; color: var(--color-text-secondary); font-size: 10.5px; line-height: 1.6; }
+
+/* Printing (Cmd/Ctrl+P). Without this the browser prints the live app shell: the sticky
+   translucent header (plus its mobile menu button — the paper is narrower than the 780px
+   breakpoint), a 100vh flex shell that fragments badly, and cards sliced in half so a card
+   title is stranded at the bottom of one page while its table starts the next.
+   Keep it minimal: drop the site chrome and controls, and never split a panel. */
+/* 18mm top/bottom (not 12): the browser's own date/title/URL/page-number header and footer live in
+   these margins and sat almost on top of the first/last line of content at 12mm. */
+@page { size: A4 portrait; margin: 18mm 12mm; }
+@media print {
+  html, body { background: #fff !important; }
+  body { min-width: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .app-shell { display: block; min-height: 0; }
+  .site-header, .site-footer, .mobile-scrim, .mobile-panel,
+  .el-message, .el-overlay, .el-popper, .no-print { display: none !important; }
+  .container { width: 100%; }
+  .page-hero, .calculator-hero { padding: 0 0 14px; border-bottom: 0; background: none; }
+  .section, .practical-section { padding: 10px 0; background: none; }
+  .practical-stack { gap: 14px; }
+  .el-card, .practical-panel, .practical-metric, .payslip-wrap, .payslip-table tr, .el-alert {
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .el-card, .practical-metric { box-shadow: none !important; }
+  .payslip-wrap { overflow: visible; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

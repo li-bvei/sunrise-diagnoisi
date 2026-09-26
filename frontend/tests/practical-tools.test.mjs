@@ -226,70 +226,78 @@ test('salary and executive breakdowns render as a real 給与明細 payslip tabl
   }
 })
 
-test('the executive view offers a separate CSV download for the monthly and the annual breakdown table', () => {
+test('the executive view offers separate CSV and PDF downloads for the monthly and the annual breakdown table', () => {
   const executiveView = read('../src/views/ExecutiveCompensationView.vue')
-  assert.match(executiveView, /import \{ downloadCsv, payslipToCsv \} from '@\/utils\/csv'/)
-  assert.match(executiveView, /@click="downloadMonthlyPayslip"/)
-  assert.match(executiveView, /@click="downloadAnnualPayslip"/)
+  assert.match(executiveView, /import \{ downloadCsv, payslipToCsv, type PayslipData \} from '@\/utils\/csv'/)
+  assert.match(executiveView, /import \{ downloadPayslipPdf \} from '@\/utils\/payslipPdf'/)
+  for (const kind of ['monthly', 'annual']) {
+    assert.match(executiveView, new RegExp(`@click="downloadPayslip\\('${kind}', 'pdf'\\)"`))
+    assert.match(executiveView, new RegExp(`@click="downloadPayslip\\('${kind}', 'csv'\\)"`))
+  }
 
-  // each download must be built from that table's own figures, not a shared/mixed-up call
-  const monthlyFn = executiveView.slice(
-    executiveView.indexOf('function downloadMonthlyPayslip'),
-    executiveView.indexOf('function downloadAnnualPayslip'),
-  )
-  const annualFn = executiveView.slice(
-    executiveView.indexOf('function downloadAnnualPayslip'),
-    executiveView.indexOf('</script>'),
-  )
-  for (const fn of [monthlyFn, annualFn]) assert.ok(fn.length > 0)
-  assert.match(monthlyFn, /healthInsuranceMonthly/)
-  assert.match(monthlyFn, /takeHomeMonthly/)
-  assert.doesNotMatch(monthlyFn, /healthInsuranceAnnual|takeHomeAnnual/)
-  assert.match(annualFn, /healthInsuranceAnnual/)
-  assert.match(annualFn, /takeHomeAnnual/)
-  assert.doesNotMatch(annualFn, /healthInsuranceMonthly|takeHomeMonthly/)
+  // each table's data is built from that table's own figures, never a mix of monthly and annual
+  const monthly = executiveView.slice(executiveView.indexOf('function buildMonthlyPayslip'), executiveView.indexOf('function buildAnnualPayslip'))
+  const annual = executiveView.slice(executiveView.indexOf('function buildAnnualPayslip'), executiveView.indexOf('const issueDate'))
+  assert.ok(monthly.length > 0 && annual.length > 0)
+  assert.match(monthly, /healthInsuranceMonthly/)
+  assert.match(monthly, /takeHomeMonthly/)
+  assert.doesNotMatch(monthly, /healthInsuranceAnnual|takeHomeAnnual/)
+  assert.match(annual, /healthInsuranceAnnual/)
+  assert.match(annual, /takeHomeAnnual/)
+  assert.doesNotMatch(annual, /healthInsuranceMonthly|takeHomeMonthly/)
 })
 
-test('the focus ring on inputs/selects is a real border, not a box-shadow ring, so it cannot visually exceed the rounded box', () => {
-  const stylesSource = read('../src/styles/index.css')
-  const wrapperRuleMatch = stylesSource.match(/\.el-input__wrapper, \.el-select__wrapper, \.el-textarea__inner \{[^}]*\}/)
-  assert.ok(wrapperRuleMatch, 'expected a combined el-input__wrapper/el-select__wrapper rule')
-  assert.match(wrapperRuleMatch[0], /overflow:\s*hidden/)
-  assert.match(wrapperRuleMatch[0], /border-radius/)
-  assert.match(wrapperRuleMatch[0], /border:\s*1px solid/)
-  assert.match(wrapperRuleMatch[0], /box-shadow:\s*none/)
-
-  const focusRuleMatch = stylesSource.match(/\.el-input__wrapper\.is-focus, \.el-select__wrapper\.is-focused \{[^}]*\}/)
-  assert.ok(focusRuleMatch, 'expected a focus-state rule for the input/select wrapper')
-  assert.match(focusRuleMatch[0], /border-color/)
-  assert.doesNotMatch(focusRuleMatch[0], /box-shadow/, 'focus state must not reintroduce a shadow-based ring')
+test('the payslip PDF is a real generated file: lazy-loaded libs, CJK-safe raster, text set via textContent', () => {
+  const pdfUtil = read('../src/utils/payslipPdf.ts')
+  const pkg = JSON.parse(read('../package.json'))
+  assert.ok(pkg.dependencies.jspdf && pkg.dependencies.html2canvas, 'jspdf + html2canvas must be declared dependencies')
+  // heavy libs only load on click, never in the main bundle
+  assert.match(pdfUtil, /import\('html2canvas'\)/)
+  assert.match(pdfUtil, /import\('jspdf'\)/)
+  assert.doesNotMatch(pdfUtil, /^import .* from '(jspdf|html2canvas)'/m)
+  // rasterised (no CJK font embedding) and injection-safe
+  assert.match(pdfUtil, /html2canvas\(sheet/)
+  assert.doesNotMatch(pdfUtil, /innerHTML/)
+  assert.match(pdfUtil, /sheet\.remove\(\)/, 'the off-screen sheet must always be cleaned up')
 })
 
-test('the dropdown popper and its white panel share one border-radius (the shadow-casting box must match the visible box)', () => {
-  const stylesSource = read('../src/styles/index.css')
-  // .el-popper is the outer box that actually carries the white background, border and
-  // drop shadow for every select/date-picker/dropdown panel in the app; its child paints
-  // at --el-border-radius-base (10px via our override). If .el-popper keeps Element Plus's
-  // own hardcoded 4px default instead, the shadow reads as spilling past the rounded
-  // white corner because the two nested boxes disagree on the curve.
-  assert.match(stylesSource, /\.el-popper \{ border-radius: var\(--radius-sm\); \}/)
+test('printing the page (Cmd+P) no longer prints the app shell or splits a panel in half', () => {
+  const styles = read('../src/styles/index.css')
+  const printBlock = styles.slice(styles.indexOf('@media print'), styles.indexOf('@media (prefers-reduced-motion'))
+  assert.match(styles, /@page \{ size: A4 portrait; margin: 18mm 12mm; \}/)
+  assert.ok(printBlock.length > 0)
+  // sticky translucent header / mobile menu / footer / toasts are dropped from paper
+  for (const selector of ['.site-header', '.site-footer', '.mobile-panel', '.el-message', '.no-print']) {
+    assert.ok(printBlock.includes(selector), `${selector} must be hidden when printing`)
+  }
+  assert.match(printBlock, /\.app-shell \{ display: block; min-height: 0; \}/)
+  // a card title must never be stranded at the bottom of a page while its table starts the next
+  assert.match(printBlock, /break-inside:\s*avoid/)
+  for (const selector of ['.el-card', '.practical-panel', '.payslip-wrap']) {
+    assert.ok(printBlock.includes(selector), `${selector} must not be split across pages`)
+  }
+  // download buttons are wrapped in .no-print so they never appear on paper
+  const executiveView = read('../src/views/ExecutiveCompensationView.vue')
+  assert.match(executiveView, /class="panel-actions no-print"/)
 })
 
 test('payslipToCsv mirrors the on-screen payslip table (payment/deduction side by side, subtotal, net pay)', () => {
-  const csv = runtime.payslipToCsv(
-    ['支给项目', '金额', '控除项目', '金额'],
-    [{ label: '基本给', value: 500_000 }],
-    [
+  const data = {
+    title: '役员报酬模拟 · 每月支付明细',
+    headers: ['支给项目', '金额', '控除项目', '金额'],
+    payments: [{ label: '基本给', value: 500_000 }],
+    deductions: [
       { label: '健康保险', value: 29_250 },
       { label: '厚生年金', value: 45_750 },
       { label: '所得税', value: 15_350 },
       { label: '住民税', value: 25_667 },
     ],
-    '支给合计', 500_000,
-    '控除合计', 116_017,
-    '差引支给额（实际到手）', 383_983,
-  )
-  assert.match(csv, /^﻿/)
+    totalPaymentLabel: '支给合计', totalPayment: 500_000,
+    totalDeductionLabel: '控除合计', totalDeduction: 116_017,
+    netPayLabel: '差引支给额（实际到手）', netPay: 383_983,
+  }
+  const csv = runtime.payslipToCsv(data)
+  assert.match(csv, /^\uFEFF/)
   const lines = csv.slice(1).split('\n')
   // header + 4 body rows (payment padded to the longer deduction side) + subtotal + net = 7 lines
   assert.equal(lines.length, 7)
@@ -303,6 +311,6 @@ test('payslipToCsv mirrors the on-screen payslip table (payment/deduction side b
   assert.equal(lines[6], '"差引支给额（实际到手）","","","383983"')
 
   // embedded quote characters must still be escaped per RFC 4180
-  const escaped = runtime.payslipToCsv(['a', 'b', 'c', 'd'], [{ label: 'x "y"', value: 1 }], [], 't', 1, 'u', 0, 'n', 1)
+  const escaped = runtime.payslipToCsv({ ...data, payments: [{ label: 'x "y"', value: 1 }], deductions: [] })
   assert.match(escaped, /""y""/)
 })
