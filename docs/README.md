@@ -24,8 +24,6 @@
 
 ## 本次整理范围
 
-- 重新核对 Git 状态、远端基线、源码、路由、数据、测试、部署配置和现有 Markdown。
-- 记录当前未提交修改，不覆盖、不回退用户已有工作。
-- 将原先散落在 README、DEVELOPMENT 和部署说明中的项目事实、风险与下一步集中到本目录。
+2026-09-26 的整理：对照当前 `main`（`ab48e5c`）重写了 `PROJECT_HANDOFF.md` 的事实部分（路由、财务工具、数据量、测试与构建数字、部署与 `base` 路径、Git 工作流、已知缺陷、协作约定），保留并标注了“咨询留资方案（尚未实现）”附录；修正了 `README.md` 里关于 `VITE_BASE_PATH` 的错误表述；给 `CHANGE_RECOMMENDATIONS.md` 加了逐条现状表。
 
-文档快照日期：2026-09-06（Asia/Tokyo）。
+文档快照日期：2026-09-26（Asia/Tokyo）。`CHANGE_RECOMMENDATIONS.md` 正文仍是 2026-09-06 的建议，以其顶部的现状表为准。

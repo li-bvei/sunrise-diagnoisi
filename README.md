@@ -118,7 +118,7 @@ docker compose logs -f --tail=100
 ```
 
 - **服务器只作部署目标**，不要在上面直接改代码；`git reset --hard` 会覆盖已跟踪文件的本地改动。
-- **子路径部署（`/server/`）**：先在项目根目录准备好 `.env`（写 `VITE_BASE_PATH=/server/`）再执行，`reset --hard` 不会动它；改回根路径就删掉该值或该文件再重新部署。
+- **当前只支持 `/server/` 子路径部署**：`frontend/vite.config.ts` 把生产构建的 `base` 写死为 `/server/`，`VITE_BASE_PATH` 目前**没有任何效果**（详见下文「宝塔 / 宿主机 Nginx 反向代理」和 `docs/PROJECT_HANDOFF.md` 第 10.2 节）。根目录 `.env` 被 `.gitignore` 忽略，`reset --hard` 不会动它。
 - **回滚**：`bash scripts/deploy.sh <旧提交号>`，或手动 `git reset --hard <旧提交>` 后重新 `docker compose up -d --build`。
 - SSL / HTTPS 与对外域名由宝塔或宿主机 Nginx 处理，容器只监听 `127.0.0.1:8090`。
 
@@ -140,7 +140,7 @@ location / {
 }
 ```
 
-此时前端按默认根路径 `/` 构建，无需额外配置。
+> **注意（未实现）**：当前生产构建的资源路径固定为 `/server/assets/...`，所以本方式在现有代码下会白屏或资源 404。要支持根路径部署，需先让 `vite.config.ts` 读取 `VITE_BASE_PATH`（见 `docs/PROJECT_HANDOFF.md` 第 10.2 节的修复思路）。
 
 ### 方式二：共用域名下的子路径（如 `/server/`）
 
@@ -164,7 +164,7 @@ location ^~ /server/ {
 VITE_BASE_PATH=/server/
 ```
 
-再执行 `docker compose up -d --build` 重新构建。`docker-compose.yml` 会把 `VITE_BASE_PATH` 作为构建参数传入 `frontend/Dockerfile`，`vite.config.ts` 据此设置 Vite 的 `base`，前端资源路径和 Vue Router 的历史模式基准路径都会自动带上该前缀；容器自身的 Nginx 配置和健康检查不需要改动。如果之后子路径改变或恢复为根路径部署，把该值改掉或删除该 `.env` 文件后重新构建即可。
+再执行 `docker compose up -d --build` 重新构建。**实际情况**：`docker-compose.yml` 确实会把 `VITE_BASE_PATH` 作为构建参数传入 `frontend/Dockerfile`，但 `vite.config.ts` 并没有读取它，生产构建的 `base` 始终是写死的 `/server/`，所以线上目前恰好只在 `/server/` 子路径下可用；上面这个 `.env` 现阶段不会改变构建结果。容器自身的 Nginx 配置和健康检查不需要改动。
 
 SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 
