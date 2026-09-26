@@ -66,6 +66,72 @@ test('payroll estimates resident tax by default and honours a manual override', 
   assert.ok(overridden.takeHomeMonthly > auto.takeHomeMonthly)
 })
 
+test('allowances follow payroll treatment: commuting is tax-free up to 15万円 but counts for insurance, taxable ones count for both, reimbursements for neither', () => {
+  const base = payroll()
+  // no allowances = exactly the previous behaviour
+  assert.equal(base.grossMonthly, 350_000)
+  assert.equal(base.insuranceBase, 350_000)
+  assert.equal(base.taxableMonthly, 350_000)
+
+  // 通勤手当 inside the limit: paid, not taxed, but part of 報酬 / 賃金 (雇用保険 = 365,000 × 0.5%)
+  const commute = payroll({ commutingAllowance: 15_000 })
+  assert.equal(runtime.ALLOWANCE_PARAMETERS.commutingNonTaxableMonthlyLimit, 150_000)
+  assert.equal(commute.commutingNonTaxable, 15_000)
+  assert.equal(commute.commutingTaxable, 0)
+  assert.equal(commute.grossMonthly, 365_000)
+  assert.equal(commute.taxableMonthly, 350_000)
+  assert.equal(commute.insuranceBase, 365_000)
+  assert.equal(commute.employee.employment, 1_825)
+  assert.equal(commute.takeHomeMonthly, 365_000 - commute.employee.total - commute.incomeTaxMonthly - commute.residentTaxMonthly)
+
+  // the same amount as a taxable allowance is taxed
+  const taxable = payroll({ taxableAllowance: 15_000 })
+  assert.equal(taxable.taxableMonthly, 365_000)
+  assert.equal(taxable.insuranceBase, 365_000)
+  assert.ok(taxable.incomeTaxMonthly > commute.incomeTaxMonthly)
+  assert.ok(taxable.residentTaxMonthly > commute.residentTaxMonthly)
+
+  // above the monthly limit the excess is taxable, and the whole amount still moves the insurance grade
+  const large = payroll({ commutingAllowance: 200_000 })
+  assert.equal(large.commutingNonTaxable, 150_000)
+  assert.equal(large.commutingTaxable, 50_000)
+  assert.equal(large.taxableMonthly, 400_000)
+  assert.equal(large.insuranceBase, 550_000)
+  assert.equal(large.healthGrade.monthly, runtime.findStandardGrade(550_000, runtime.HEALTH_STANDARD_GRADES).monthly)
+
+  // a cost reimbursement is paid out and costs the company, but touches neither tax nor insurance
+  const reimbursed = payroll({ otherNonTaxableAllowance: 30_000 })
+  assert.equal(reimbursed.grossMonthly, 380_000)
+  assert.equal(reimbursed.insuranceBase, 350_000)
+  assert.deepEqual(reimbursed.employee, base.employee)
+  assert.deepEqual(reimbursed.employer, base.employer)
+  assert.equal(reimbursed.incomeTaxMonthly, base.incomeTaxMonthly)
+  assert.equal(reimbursed.residentTaxMonthly, base.residentTaxMonthly)
+  assert.equal(reimbursed.takeHomeMonthly, base.takeHomeMonthly + 30_000)
+  assert.equal(reimbursed.employerCostMonthly, base.employerCostMonthly + 30_000)
+
+  // junk allowance input never leaks negative or non-finite numbers
+  const junk = payroll({ commutingAllowance: -5, taxableAllowance: Number.NaN, otherNonTaxableAllowance: -1 })
+  assert.equal(junk.grossMonthly, 350_000)
+  assert.deepEqual(junk.employee, base.employee)
+})
+
+test('the salary page takes allowances in yen and lists them as rows of the payslip', () => {
+  const view = read('../src/views/SalaryView.vue')
+  for (const key of ['commutingAllowance', 'taxableAllowance', 'otherNonTaxableAllowance']) {
+    assert.match(view, new RegExp(`updateAllowance\\('${key}'`))
+  }
+  assert.match(view, /v-for="\(row, index\) in bodyRows"/)
+  assert.match(view, /salary\.commutingNonTaxable/)
+  // 支給合計 is everything paid (allowances included), never the base salary alone
+  assert.match(view, /money\(result\.grossMonthly\)/)
+  assert.doesNotMatch(view, /form\.monthlySalary!/)
+  // the distance to the next insurance grade is measured on the insurance base, not the base salary
+  assert.match(view, /result\.value\.insuranceBase/)
+  // the allowance inputs stay in the (unprinted) input card, and are summarised in the print header
+  assert.match(view, /form\.commutingAllowance > 0/)
+})
+
 test('executive compensation derives the monthly salary from a single annual input, with no company profit or corporate tax involved', () => {
   const auto = runtime.calculateExecutiveCompensation(6_000_000, '東京都', true, null)
   assert.equal(auto.annualCompensation, 6_000_000)

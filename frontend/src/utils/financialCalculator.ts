@@ -1,4 +1,5 @@
 import {
+  ALLOWANCE_PARAMETERS,
   DEPENDENT_DEDUCTION_PARAMETERS,
   HEALTH_STANDARD_GRADES,
   INCOME_TAX_PARAMETERS,
@@ -115,29 +116,52 @@ export function calculateInsurance(
   return { employee, employer, healthGrade, pensionGrade }
 }
 
+/**
+ * Monthly payroll from the base salary plus optional allowances. How each kind is treated:
+ *  - 通勤手当: income-tax free up to the monthly limit (the excess is taxable), but counted in full for
+ *    社会保険 (標準報酬月額) and 雇用保険.
+ *  - taxable allowances: taxed, and counted for 社会保険・雇用保険.
+ *  - non-taxable reimbursements (出張旅費など): neither taxed nor counted for 社会保険・雇用保険, but
+ *    paid out (総支給, 手取り) and a cost to the company.
+ */
 export function calculatePayroll(input: PayrollInput): PayrollResult {
   const monthlySalary = Math.max(0, input.monthlySalary)
   const dependentCount = input.dependentCount ?? 0
-  const insurance = calculateInsurance(monthlySalary, input.prefecture, input.includeCare, true)
-  const annualSalary = monthlySalary * 12
+  const commuting = yen(input.commutingAllowance ?? 0)
+  const taxableAllowance = yen(input.taxableAllowance ?? 0)
+  const otherNonTaxable = yen(input.otherNonTaxableAllowance ?? 0)
+  const commutingNonTaxable = Math.min(commuting, ALLOWANCE_PARAMETERS.commutingNonTaxableMonthlyLimit)
+  const commutingTaxable = commuting - commutingNonTaxable
+
+  const insuranceBase = monthlySalary + taxableAllowance + commuting
+  const taxableMonthly = monthlySalary + taxableAllowance + commutingTaxable
+  const grossMonthly = insuranceBase + otherNonTaxable
+
+  const insurance = calculateInsurance(insuranceBase, input.prefecture, input.includeCare, true)
+  const annualTaxableSalary = taxableMonthly * 12
   const annualEmployeeInsurance = insurance.employee.total * 12
-  const annualIncomeTax = estimateAnnualIncomeTax(annualSalary, annualEmployeeInsurance, dependentCount)
+  const annualIncomeTax = estimateAnnualIncomeTax(annualTaxableSalary, annualEmployeeInsurance, dependentCount)
   const incomeTaxMonthly = yen(annualIncomeTax / 12)
 
   const residentTaxIsEstimated = input.residentTaxMonthlyOverride === null
   const residentTaxMonthly = residentTaxIsEstimated
-    ? yen(estimateAnnualResidentTax(annualSalary, annualEmployeeInsurance, dependentCount) / 12)
+    ? yen(estimateAnnualResidentTax(annualTaxableSalary, annualEmployeeInsurance, dependentCount) / 12)
     : yen(input.residentTaxMonthlyOverride ?? 0)
 
-  const takeHomeMonthly = yen(monthlySalary - insurance.employee.total - incomeTaxMonthly - residentTaxMonthly)
-  const employerCostMonthly = yen(monthlySalary + insurance.employer.total)
+  const takeHomeMonthly = yen(grossMonthly - insurance.employee.total - incomeTaxMonthly - residentTaxMonthly)
+  const employerCostMonthly = yen(grossMonthly + insurance.employer.total)
   return {
     ...insurance,
+    grossMonthly: yen(grossMonthly),
+    commutingNonTaxable,
+    commutingTaxable,
+    taxableMonthly: yen(taxableMonthly),
+    insuranceBase: yen(insuranceBase),
     incomeTaxMonthly,
     residentTaxMonthly,
     residentTaxIsEstimated,
     takeHomeMonthly,
-    takeHomeRatio: monthlySalary > 0 ? takeHomeMonthly / monthlySalary : 0,
+    takeHomeRatio: grossMonthly > 0 ? takeHomeMonthly / grossMonthly : 0,
     employerCostMonthly,
     employerCostAnnual: yen(employerCostMonthly * 12),
     annualTakeHome: yen(takeHomeMonthly * 12),

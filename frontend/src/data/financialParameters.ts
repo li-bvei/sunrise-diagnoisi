@@ -59,6 +59,15 @@ export const SOCIAL_INSURANCE_RATES = {
   childContributionEmployer: 0.0036,
 } as const
 
+/**
+ * 給与に含まれない（非課税の）通勤手当の月額限度: 電車・バス等の通勤定期代など、合理的な経路・方法の
+ * 実費で月15万円まで（所得税法第9条第1項第5号、同施行令第20条の2）。自家用車・自転車通勤は距離別に
+ * 限度額がもっと低いので、ここでは扱わない。
+ */
+export const ALLOWANCE_PARAMETERS = {
+  commutingNonTaxableMonthlyLimit: 150_000,
+} as const
+
 export const HEALTH_STANDARD_GRADES: StandardRemunerationGrade[] = [
   [1, 58000, null, 63000], [2, 68000, 63000, 73000], [3, 78000, 73000, 83000],
   [4, 88000, 83000, 93000], [5, 98000, 93000, 101000], [6, 104000, 101000, 107000],
