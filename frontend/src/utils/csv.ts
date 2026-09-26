@@ -7,6 +7,15 @@ export function rowsToCsv(rows: (string | number)[][]): string {
   return `﻿${rows.map((row) => row.map(csvCell).join(',')).join('\n')}`
 }
 
+/**
+ * Builds a download name such as "役员报酬_每月支付明细_600万円_20260926.pdf": the parts joined by
+ * "_", with whitespace and the characters no operating system accepts in a file name removed.
+ */
+export function buildFilename(parts: string[], extension: string): string {
+  const clean = (part: string) => part.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, '')
+  return `${parts.map(clean).filter(Boolean).join('_')}.${extension}`
+}
+
 /** Triggers a browser download of the given file content. */
 export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)

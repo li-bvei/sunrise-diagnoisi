@@ -3,15 +3,16 @@ import { computed, reactive, ref, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
-import FinancialDisclaimer from '@/components/practical/FinancialDisclaimer.vue'
+import PrintHeader from '@/components/practical/PrintHeader.vue'
 import MetricCard from '@/components/practical/MetricCard.vue'
 import { practicalToolMessages } from '@/data/practicalToolMessages'
-import { FINANCIAL_DISCLAIMER, PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
+import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
 import { useSettingsStore } from '@/stores/settings'
 import { calculateExecutiveCompensation, formatYen } from '@/utils/financialCalculator'
 import { formatIncomeManYen, parseIncomeManYenInput } from '@/utils/numericInput'
-import { downloadCsv, payslipToCsv, type PayslipData } from '@/utils/csv'
+import { buildFilename, downloadCsv, payslipToCsv, type PayslipData } from '@/utils/csv'
 import { downloadPayslipPdf } from '@/utils/payslipPdf'
+import { issueDate, localDateStamp } from '@/utils/dateStamp'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
@@ -63,13 +64,12 @@ const totalAnnualCost = computed(() => {
 
 watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { immediate: true })
 
-function localDateStamp(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = `${now.getMonth() + 1}`.padStart(2, '0')
-  const d = `${now.getDate()}`.padStart(2, '0')
-  return `${y}${m}${d}`
-}
+// 概算 stays in the row label (it travels into the CSV/PDF too) instead of a footnote paragraph.
+const residentTaxLabel = computed(() => (
+  result.value.residentTaxIsEstimated
+    ? `${copy.value.executive.residentTax}（${copy.value.common.estimated}）`
+    : copy.value.executive.residentTax
+))
 
 const payslipHeaders = computed((): [string, string, string, string] => [
   copy.value.payslip.paymentItem, copy.value.payslip.amount, copy.value.payslip.deductionItem, copy.value.payslip.amount,
@@ -79,14 +79,14 @@ const payslipHeaders = computed((): [string, string, string, string] => [
 // the same figures; each builder only ever reads its own (monthly or annual) fields.
 function buildMonthlyPayslip(): PayslipData {
   return {
-    title: `${copy.value.executive.title} · ${copy.value.executive.monthlyBreakdown}`,
+    title: `${copy.value.executive.reportName} · ${copy.value.executive.monthlyBreakdown}`,
     headers: payslipHeaders.value,
     payments: [{ label: copy.value.payslip.base, value: result.value.monthlyCompensation }],
     deductions: [
       { label: copy.value.executive.health, value: result.value.healthInsuranceMonthly },
       { label: copy.value.executive.pension, value: result.value.pensionInsuranceMonthly },
       { label: copy.value.executive.incomeTax, value: result.value.incomeTaxMonthly },
-      { label: copy.value.executive.residentTax, value: result.value.residentTaxMonthly },
+      { label: residentTaxLabel.value, value: result.value.residentTaxMonthly },
     ],
     totalPaymentLabel: copy.value.payslip.totalPayment, totalPayment: result.value.monthlyCompensation,
     totalDeductionLabel: copy.value.payslip.totalDeduction,
@@ -97,14 +97,14 @@ function buildMonthlyPayslip(): PayslipData {
 
 function buildAnnualPayslip(): PayslipData {
   return {
-    title: `${copy.value.executive.title} · ${copy.value.executive.annualBreakdown}`,
+    title: `${copy.value.executive.reportName} · ${copy.value.executive.annualBreakdown}`,
     headers: payslipHeaders.value,
     payments: [{ label: copy.value.payslip.base, value: result.value.annualCompensation }],
     deductions: [
       { label: copy.value.executive.health, value: result.value.healthInsuranceAnnual },
       { label: copy.value.executive.pension, value: result.value.pensionInsuranceAnnual },
       { label: copy.value.executive.incomeTax, value: result.value.incomeTaxAnnual },
-      { label: copy.value.executive.residentTax, value: result.value.residentTaxAnnual },
+      { label: residentTaxLabel.value, value: result.value.residentTaxAnnual },
     ],
     totalPaymentLabel: copy.value.payslip.totalPayment, totalPayment: result.value.annualCompensation,
     totalDeductionLabel: copy.value.payslip.totalDeduction,
@@ -113,35 +113,41 @@ function buildAnnualPayslip(): PayslipData {
   }
 }
 
-const issueDate = () => localDateStamp().replace(/^(\d{4})(\d{2})(\d{2})$/, '$1/$2/$3')
+// The inputs behind the figures: printed above the tables and at the top of the downloaded PDF.
+const conditionLines = computed(() => [
+  [
+    `${copy.value.executive.compensationAnnual}：${money(result.value.annualCompensation)}`,
+    `${copy.value.common.age}：${form.age}${copy.value.payslip.ageUnit}`,
+    `${copy.value.common.prefecture}：${form.prefecture}`,
+    `${copy.value.common.dependents}：${form.dependentCount}${copy.value.payslip.peopleUnit}`,
+    ...(form.includeCare ? [copy.value.payslip.careIncluded] : []),
+  ].join('　'),
+  issueDate(),
+])
 
 const pdfBusy = ref<'monthly' | 'annual' | null>(null)
 
 async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf') {
   const data = kind === 'monthly' ? buildMonthlyPayslip() : buildAnnualPayslip()
-  const filename = `sunrise-executive-payslip-${kind}-${localDateStamp()}`
+  const filename = buildFilename([
+    copy.value.executive.reportName,
+    kind === 'monthly' ? copy.value.executive.monthlyBreakdown : copy.value.executive.annualBreakdown,
+    `${formatIncomeManYen(annualCompensation.value)}万円`,
+    localDateStamp(),
+  ], format)
   if (format === 'csv') {
-    downloadCsv(`${filename}.csv`, payslipToCsv(data))
+    downloadCsv(filename, payslipToCsv(data))
     ElMessage.success(copy.value.payslip.downloaded)
     return
   }
   if (pdfBusy.value) return
   pdfBusy.value = kind
   try {
-    await downloadPayslipPdf(`${filename}.pdf`, {
+    await downloadPayslipPdf(filename, {
       data,
       brand: settings.dictionary.brand,
       format: money,
-      metaLines: [
-        `${copy.value.executive.compensationAnnual}：${money(result.value.annualCompensation)}`,
-        `${copy.value.common.prefecture}：${form.prefecture}　${copy.value.common.dependents}：${form.dependentCount}`,
-        issueDate(),
-      ],
-      footnotes: [
-        ...(result.value.residentTaxIsEstimated ? [copy.value.executive.residentHint] : []),
-        copy.value.executive.note,
-        FINANCIAL_DISCLAIMER[settings.locale],
-      ],
+      metaLines: conditionLines.value,
     })
     ElMessage.success(copy.value.payslip.pdfDownloaded)
   } catch {
@@ -154,9 +160,10 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
 
 <template>
   <div class="page-surface">
-    <PracticalToolHero :eyebrow="copy.executive.eyebrow" :title="copy.executive.title" :description="copy.executive.description" />
+    <PracticalToolHero class="no-print" :eyebrow="copy.executive.eyebrow" :title="copy.executive.title" :description="copy.executive.description" />
     <section class="section practical-section"><div class="container practical-stack">
-      <el-card shadow="never" class="practical-panel">
+      <PrintHeader :title="copy.executive.reportName" :brand="settings.dictionary.brand" :lines="conditionLines" />
+      <el-card shadow="never" class="practical-panel no-print">
         <template #header>{{ copy.common.input }}</template>
         <el-form label-position="top">
           <div class="practical-form-grid">
@@ -192,7 +199,7 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
         </el-form>
       </el-card>
 
-      <div class="practical-metrics">
+      <div class="practical-metrics no-print">
         <MetricCard :label="copy.executive.monthlyCompensation" :value="money(result.monthlyCompensation)" tone="primary" />
         <MetricCard :label="copy.executive.takeHomeAnnual" :value="money(result.takeHomeAnnual)" tone="success" />
       </div>
@@ -201,7 +208,7 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
         <template #header>
           <div class="panel-header-row">
             <span>{{ copy.executive.totalCostTitle }}</span>
-            <label class="switch-label">
+            <label class="switch-label no-print">
               <el-switch v-model="includeEmployerBurden" />
               {{ copy.executive.includeEmployerBurden }}
             </label>
@@ -215,7 +222,6 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
           <div v-if="includeEmployerBurden"><span>{{ copy.executive.employerBurdenLine }}</span><strong>{{ money(totalAnnualCost.employerBurden) }}</strong></div>
           <div class="total"><span>{{ copy.executive.totalCost }}</span><strong>{{ money(totalAnnualCost.total) }}</strong></div>
         </div>
-        <p class="panel-note">{{ includeEmployerBurden ? copy.executive.employerBurdenNote : copy.executive.personalOnlyNote }}</p>
       </el-card>
 
       <el-card shadow="never" class="practical-panel">
@@ -321,7 +327,12 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
               </tr>
               <tr>
                 <td></td><td class="amount"></td>
-                <td>{{ copy.executive.residentTax }}</td>
+                <td>
+                  <span class="payslip-label-with-tag">
+                    {{ copy.executive.residentTax }}
+                    <em v-if="result.residentTaxIsEstimated" class="inline-tag">{{ copy.common.estimated }}</em>
+                  </span>
+                </td>
                 <td class="amount">{{ money(result.residentTaxAnnual) }}</td>
               </tr>
             </tbody>
@@ -339,11 +350,7 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
             </tfoot>
           </table>
         </div>
-        <p v-if="result.residentTaxIsEstimated" class="panel-note">{{ copy.executive.residentHint }}</p>
       </el-card>
-
-      <el-alert type="info" :closable="false" show-icon :title="copy.executive.note" />
-      <FinancialDisclaimer />
     </div></section>
   </div>
 </template>
@@ -353,7 +360,6 @@ async function downloadPayslip(kind: 'monthly' | 'annual', format: 'csv' | 'pdf'
 .inline-btn:hover { text-decoration: underline; text-underline-offset: 2px; }
 .resident-auto { color: var(--color-text-secondary); font-size: 13px; }
 .inline-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--color-primary-light); color: var(--color-primary); font-size: 11px; font-style: normal; }
-.panel-note { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .field-help { margin: 7px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .panel-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
 .panel-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }

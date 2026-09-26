@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import { build } from 'esbuild'
@@ -12,6 +12,7 @@ const bundled = await build({
       export * from './src/utils/financialCalculator.ts'
       export * from './src/utils/stayCalculator.ts'
       export * from './src/utils/csv.ts'
+      export * from './src/utils/dateStamp.ts'
       export * from './src/data/financialParameters.ts'
     `,
     resolveDir: resolve('.'),
@@ -228,7 +229,7 @@ test('salary and executive breakdowns render as a real 給与明細 payslip tabl
 
 test('the executive view offers separate CSV and PDF downloads for the monthly and the annual breakdown table', () => {
   const executiveView = read('../src/views/ExecutiveCompensationView.vue')
-  assert.match(executiveView, /import \{ downloadCsv, payslipToCsv, type PayslipData \} from '@\/utils\/csv'/)
+  assert.match(executiveView, /import \{ buildFilename, downloadCsv, payslipToCsv, type PayslipData \} from '@\/utils\/csv'/)
   assert.match(executiveView, /import \{ downloadPayslipPdf \} from '@\/utils\/payslipPdf'/)
   for (const kind of ['monthly', 'annual']) {
     assert.match(executiveView, new RegExp(`@click="downloadPayslip\\('${kind}', 'pdf'\\)"`))
@@ -237,7 +238,7 @@ test('the executive view offers separate CSV and PDF downloads for the monthly a
 
   // each table's data is built from that table's own figures, never a mix of monthly and annual
   const monthly = executiveView.slice(executiveView.indexOf('function buildMonthlyPayslip'), executiveView.indexOf('function buildAnnualPayslip'))
-  const annual = executiveView.slice(executiveView.indexOf('function buildAnnualPayslip'), executiveView.indexOf('const issueDate'))
+  const annual = executiveView.slice(executiveView.indexOf('function buildAnnualPayslip'), executiveView.indexOf('const conditionLines'))
   assert.ok(monthly.length > 0 && annual.length > 0)
   assert.match(monthly, /healthInsuranceMonthly/)
   assert.match(monthly, /takeHomeMonthly/)
@@ -259,6 +260,65 @@ test('the payslip PDF is a real generated file: lazy-loaded libs, CJK-safe raste
   assert.match(pdfUtil, /html2canvas\(sheet/)
   assert.doesNotMatch(pdfUtil, /innerHTML/)
   assert.match(pdfUtil, /sheet\.remove\(\)/, 'the off-screen sheet must always be cleaned up')
+})
+
+test('download file names read as customer documents, e.g. 役员报酬_每月支付明细_600万円_20260926.pdf', () => {
+  assert.equal(runtime.buildFilename(['役员报酬', '每月支付明细', '600万円', '20260926'], 'pdf'), '役员报酬_每月支付明细_600万円_20260926.pdf')
+  // characters an operating system rejects and stray whitespace never reach the name; empty parts are skipped
+  assert.equal(runtime.buildFilename(['a/b', ' c:d ', '', 'e f'], 'csv'), 'ab_cd_ef.csv')
+  assert.equal(runtime.localDateStamp(new Date(2026, 8, 6)), '20260906')
+  assert.equal(runtime.issueDate(new Date(2026, 8, 6)), '2026/09/06')
+
+  const executiveView = read('../src/views/ExecutiveCompensationView.vue')
+  assert.match(executiveView, /buildFilename\(\[/)
+  assert.match(executiveView, /\$\{formatIncomeManYen\(annualCompensation\.value\)\}万円/)
+  assert.doesNotMatch(executiveView, /sunrise-executive-payslip/)
+  // the CSV and the PDF share one name, differing only in the extension
+  assert.match(executiveView, /\], format\)/)
+})
+
+test('customer-facing output carries no explanatory notes or disclaimers; 概算 stays as a label on the tax rows', () => {
+  const salaryView = read('../src/views/SalaryView.vue')
+  const executiveView = read('../src/views/ExecutiveCompensationView.vue')
+  const messages = read('../src/data/practicalToolMessages.ts')
+  for (const view of [salaryView, executiveView]) {
+    assert.doesNotMatch(view, /FinancialDisclaimer|<el-alert|residentHint|personalOnlyNote|employerBurdenNote/)
+  }
+  assert.doesNotMatch(executiveView, /class="panel-note"/)
+  assert.doesNotMatch(messages, /residentHint|personalOnlyNote|employerBurdenNote/)
+  assert.doesNotMatch(read('../src/data/financialParameters.ts'), /FINANCIAL_DISCLAIMER/)
+  assert.equal(existsSync(new URL('../src/components/practical/FinancialDisclaimer.vue', import.meta.url)), false)
+
+  // the PDF is the table and its heading only
+  const pdfUtil = read('../src/utils/payslipPdf.ts')
+  assert.doesNotMatch(pdfUtil, /footnotes|payslip-pdf-notes/)
+  assert.doesNotMatch(executiveView, /footnotes/)
+  assert.doesNotMatch(read('../src/styles/index.css'), /\.payslip-pdf-notes|\.practical-disclaimer/)
+
+  // 概算 travels in the row label (screen tag, CSV and PDF) now that there is no footnote to carry it
+  assert.match(executiveView, /residentTaxLabel\.value/)
+  assert.equal((executiveView.match(/class="inline-tag"/g) ?? []).length, 2, 'both the monthly and the annual table tag the resident tax')
+})
+
+test('the printed page is one A4 sheet: a print-only header replaces the input form and the repeated summary cards', () => {
+  const styles = read('../src/styles/index.css')
+  const printBlock = styles.slice(styles.indexOf('@media print'), styles.indexOf('@media (prefers-reduced-motion'))
+  const header = read('../src/components/practical/PrintHeader.vue')
+  assert.match(header, /class="print-only print-header"/)
+  // hidden on screen (declared before the print block), shown on paper
+  assert.match(styles.slice(0, styles.indexOf('@media print')), /\.print-only \{ display: none; \}/)
+  assert.match(printBlock, /\.print-only \{ display: block; \}/)
+
+  for (const path of ['../src/views/SalaryView.vue', '../src/views/ExecutiveCompensationView.vue']) {
+    const view = read(path)
+    assert.match(view, /<PrintHeader\b/)
+    assert.match(view, /<PracticalToolHero class="no-print"/)
+    assert.match(view, /class="practical-panel no-print"/, 'the input form must not be printed')
+  }
+  // the executive summary cards only repeat 基本給 / 差引支給額 from the tables below
+  assert.match(read('../src/views/ExecutiveCompensationView.vue'), /class="practical-metrics no-print"/)
+  // the salary page's stepper-style stacking (mobile rule) must not apply on paper
+  assert.match(printBlock, /\.practical-metrics\.three/)
 })
 
 test('printing the page (Cmd+P) no longer prints the app shell or splits a panel in half', () => {

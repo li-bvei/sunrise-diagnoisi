@@ -125,8 +125,3 @@ export const INCOME_TAX_PARAMETERS = {
     { upper: Number.POSITIVE_INFINITY, rate: 0.45, deduction: 4_796_000 },
   ],
 } as const
-
-export const FINANCIAL_DISCLAIMER = {
-  'zh-CN': '本结果仅供参考，实际金额可能因年度费率、个人情况、保险者及税务处理而不同，请以相关机构或专业人士确认结果为准。',
-  'ja-JP': '本結果は参考値です。実際の金額は年度ごとの料率、個人の状況、保険者および税務上の取扱いにより異なる場合があります。最終的には関係機関または専門家へご確認ください。',
-} as const

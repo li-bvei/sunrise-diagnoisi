@@ -857,12 +857,6 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .payslip-table { font-size: 12px; }
   .payslip-table th, .payslip-table td { padding: 8px 10px; }
 }
-.practical-disclaimer { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #fbfcfc; color: var(--color-text-secondary); font-size: 12px; }
-.practical-disclaimer > .el-icon { flex: 0 0 auto; margin-top: 4px; color: var(--color-primary); }
-.practical-disclaimer p { margin-bottom: 7px; }
-.practical-disclaimer summary { cursor: pointer; color: var(--color-primary); font-weight: 700; }
-.practical-disclaimer ul { margin: 10px 0 0; padding-left: 18px; }
-.practical-disclaimer a { text-decoration: underline; }
 .grade-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .grade-list { display: grid; gap: 10px; }
 .grade-list article { display: grid; gap: 3px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 10px; background: #fbfcfc; }
@@ -1015,8 +1009,10 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .payslip-pdf-meta p { margin: 0; color: var(--color-text-secondary); font-size: 12px; }
 .payslip-pdf-sheet .payslip-wrap { overflow: visible; }
 .payslip-pdf-sheet .payslip-table { min-width: 0; font-size: 13px; }
-.payslip-pdf-notes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
-.payslip-pdf-notes p { margin: 0 0 4px; color: var(--color-text-secondary); font-size: 10.5px; line-height: 1.6; }
+
+/* Shown on paper only (see PrintHeader.vue): the title / brand / condition lines that stand in for the
+   input form, which is not printed. */
+.print-only { display: none; }
 
 /* Printing (Cmd/Ctrl+P). Without this the browser prints the live app shell: the sticky
    translucent header (plus its mobile menu button — the paper is narrower than the 780px
@@ -1035,12 +1031,32 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .container { width: 100%; }
   .page-hero, .calculator-hero { padding: 0 0 14px; border-bottom: 0; background: none; }
   .section, .practical-section { padding: 10px 0; background: none; }
-  .practical-stack { gap: 14px; }
   .el-card, .practical-panel, .practical-metric, .payslip-wrap, .payslip-table tr, .el-alert {
     break-inside: avoid; page-break-inside: avoid;
   }
   .el-card, .practical-metric { box-shadow: none !important; }
   .payslip-wrap { overflow: visible; }
+
+  /* One A4 page: the input form and the summary cards that repeat the tables are hidden
+     (.no-print in the views); what stays is compacted. The paper is narrower than the 780px
+     breakpoint, so the stacked-mobile rules apply here too and are undone where they cost height. */
+  .print-only { display: block; }
+  .print-header .payslip-pdf-meta { margin: 8px 0 10px; }
+  .practical-stack { gap: 10px; }
+  .practical-panel .el-card__header { padding: 7px 14px; }
+  .practical-panel .el-card__body { padding: 10px 14px; }
+  .payslip-table th, .payslip-table td { padding: 5px 12px; }
+  .practical-metrics, .practical-metrics.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .practical-metric { padding: 10px 14px; }
+  .practical-metric span { margin-bottom: 3px; }
+  .practical-metric strong { font-size: 20px; }
+  /* 年度总费用 in two columns (the long 健康保险 label would wrap in a five-column strip) */
+  .practical-breakdown { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+  .practical-breakdown > div { padding: 5px 0; }
+  .practical-breakdown .total { grid-column: 1 / -1; margin: 4px 0 0; padding: 8px 0 0; }
+  .practical-breakdown span { font-size: 12px; }
+  .practical-breakdown strong { font-size: 13px; }
+  .practical-breakdown .total strong { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

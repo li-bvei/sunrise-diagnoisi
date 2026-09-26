@@ -5,8 +5,6 @@ export interface PayslipPdfOptions {
   data: PayslipData
   /** Short lines under the title: the inputs this payslip was calculated from, the issue date, … */
   metaLines: string[]
-  /** Small print under the table: estimate caveats, disclaimer. */
-  footnotes: string[]
   brand: string
   format: (value: number) => string
 }
@@ -76,12 +74,6 @@ export function buildPayslipSheet(options: PayslipPdfOptions): HTMLElement {
   const wrap = el('div', 'payslip-wrap')
   wrap.append(table)
   sheet.append(wrap)
-
-  if (options.footnotes.length) {
-    const notes = el('div', 'payslip-pdf-notes')
-    for (const line of options.footnotes) notes.append(el('p', undefined, line))
-    sheet.append(notes)
-  }
   return sheet
 }
 

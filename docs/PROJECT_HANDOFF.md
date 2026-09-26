@@ -12,7 +12,7 @@
 - 前端有 **7 个工具**、**5 个业务分类**：高度人才积分（含 J-Skip）、永住条件、租房初期费用、工资/社保/到手、役员报酬、在日天数记录、宅建刷题。宅建考点速查、薄弱分析是辅助路由，不计入工具数。
 - 全部是**前端本地计算**。没有 API、没有数据库，姓名/电话等只存在当前页面状态。`localStorage` 只存语言偏好、宅建学习记录和出入境记录（见第 8 节）。
 - 界面已统一为 **Apple 风格设计系统**；工资和役员报酬的明细是**日本工资单（給与明細）表格**，役员报酬的月額/年額表各有独立的 **PDF 和 CSV 下载**。
-- 代码已通过：`vue-tsc`、**42 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
+- 代码已通过：`vue-tsc`、**45 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
 - **构建路径已修复（2026-09-26）**：`VITE_BASE_PATH` 现在真正生效，**不设置时默认 `/server/`**（与线上一致），所以部署命令和服务器配置都不用动；要换根路径只需在服务器 `.env` 写 `VITE_BASE_PATH=/`（第 10.2 节）。
 - 服务器更新流程是：**合并到 `main` → 服务器执行 `bash scripts/deploy.sh` → 浏览器强制刷新**。只推分支不会被部署（第 10、11 节）。
 - 法律页（隐私/条款/免责）仍是占位；咨询留资流程只有方案、没有实现（第 14 节）。
@@ -33,6 +33,7 @@
 | **去掉高度人才、租房两份在线报告的打印 / 另存 PDF**及整套打印代码 | 2026-09-20 | 业主要求；报告只保留在线预览 |
 | 输入框/下拉框的聚焦圈用**真实 `border`**，不用 `box-shadow` 环 | 2026-09-20 | 业主反馈阴影“超出选择框”；边框不可能画出圆角之外 |
 | 页面级 Cmd/Ctrl+P 使用一份**精简打印样式**（不属于上一条被删的报告打印机制） | 2026-09-26 | 业主反馈打印时页首页尾错位（第 5.5 节） |
+| **工资、役员报酬页与 PDF/打印件去掉全部说明和免责声明**；打印压成一页、条件缩略为 1～2 行；下载文件名改为 `役员报酬_每月支付明细_600万円_日期` 形式 | 2026-09-26 | 业主：这是打印给客户的；“过于 AI 的免责声明”不要（第 5.4、5.5 节） |
 | 构建路径 `VITE_BASE_PATH` **默认必须保持 `/server/`** | 2026-09-26 | 业主让我按“上线部署方便”自行判断：修复让变量生效，但默认值不变，保证服务器无需改动、下一次部署不会白屏 |
 
 ## 3. 技术架构
@@ -51,7 +52,7 @@
 
 ```text
 frontend/src/
-├─ components/  公共组件、报告、题库组件、practical（指标卡/免责声明）
+├─ components/  公共组件、报告、题库组件、practical（指标卡/打印页头）
 ├─ data/        双语文案、工具元数据、题库、院校名单、财务参数、官方来源
 ├─ layouts/     公共前台布局
 ├─ router/      路由和页面标题
@@ -122,7 +123,7 @@ frontend/src/
 - 住民税没有调整控除、非课税限度额、自治体独自的超过课税。
 - 没有其他所得控除（医疗费、生命保险料、iDeCo 等）、税额控除。
 - 2025 年度日本税制改正上调了多项门槛，2026 年度具体数字**未对照官方原文核实**。
-- 结果不得表述为税务/法律意见；页面里已有免责声明，PDF 脚注也带免责声明。
+- 结果不得表述为税务/法律意见。**页面、打印件、PDF 里已按业主要求去掉所有说明文字和免责声明**（2026-09-26）；只在项目名里保留“（概算）”：所得税一直带，住民税在系统估算（未手动调整）时也带。
 
 ### 5.3 工资单表格（給与明細）
 
@@ -139,13 +140,19 @@ frontend/src/
   - 必须 `new jsPDF({ compress: true })`，否则 PNG 以原始像素嵌入，一页会有约 5 MB。
   - 所有文本通过 `textContent` 写入，不解析为 HTML；离屏 DOM 在 `finally` 中一定移除。
   - 两个库用 `import()` 懒加载，各是独立 chunk（jsPDF 约 381 KB、html2canvas 约 197 KB），点击前不下载。
-- 文件名用**本地日期**（不是 `toISOString()`，后者在日本会差一天）：`sunrise-executive-payslip-{monthly|annual}-YYYYMMDD.{pdf|csv}`。
+- **PDF 版面**：标题（`役员报酬 · 每月支付明细`，不带“模拟/シミュレーター”）+ 右上角品牌 + 两行条件（年工资、年龄、都道府県、扶养人数、是否含介护；日期）+ 表格。**没有脚注/免责声明**。条件行由页面的 `conditionLines` 生成，PDF 和 Cmd+P 打印页头共用。
+- **文件名**（`buildFilename()`，`utils/csv.ts`）：`{报告名}_{表名}_{年工资}万円_{YYYYMMDD}.{pdf|csv}`，跟随界面语言，例如 `役员报酬_每月支付明细_600万円_20260926.pdf`、`役員報酬_月額の支払内訳_600万円_20260926.pdf`；去掉系统不允许的字符和空白。日期用**本地日期**（`utils/dateStamp.ts`，不是 `toISOString()`，后者在日本会差一天）。
 
 ### 5.5 页面打印（Cmd/Ctrl+P）
 
 2026-09-26 用无头 Chrome 复现：未加打印样式时会印出网站顶栏和手机菜单按钮（纸宽小于 780px 断点）、把卡片从中间劈开（“每年支付明细”标题留在上一页页底、表格在下一页页首）、多出一页孤零零的页脚（共 4 页）；浏览器自带的日期/网址/页码行还紧贴正文（12mm 边距太小）。
 
-现在 `index.css` 末尾有一份精简的 `@media print`：隐藏 `.site-header / .site-footer / .mobile-panel / .el-message / .no-print`，取消 `.app-shell` 的 flex 与 100vh，`.el-card / .practical-panel / .payslip-wrap / .payslip-table tr` 不允许跨页；`@page { size: A4 portrait; margin: 18mm 12mm }`。同一页面复测变为 3 页、卡片完整。下载按钮包在 `.no-print` 里，不会印到纸上。
+现在 `index.css` 末尾有一份精简的 `@media print`：隐藏 `.site-header / .site-footer / .mobile-panel / .el-message / .no-print`，取消 `.app-shell` 的 flex 与 100vh，`.el-card / .practical-panel / .payslip-wrap / .payslip-table tr` 不允许跨页；`@page { size: A4 portrait; margin: 18mm 12mm }`。下载按钮包在 `.no-print` 里，不会印到纸上。
+
+**工资页、役员报酬页现在打印成一页 A4**（2026-09-26，业主要求“入力条件缩略到一两行，整体控制到一页”）：
+- 输入卡片、页头介绍（`PracticalToolHero`）、役员报酬页两张汇总卡（与表里的基本給/差引支給額重复）、年度总费用的开关都加了 `.no-print`；取而代之的是只在纸上显示的 `PrintHeader`（`components/practical/PrintHeader.vue`，`.print-only`）：标题 + 品牌 + 两行条件，版式与 PDF 抬头相同。
+- 打印块里把卡片/表格的内边距压小，年度总费用改成两列；纸宽（约 703px）小于 780px 断点，所以移动端的堆叠规则在纸上也生效，需要时要在打印块里撤销（例如工资页三张汇总卡 `.practical-metrics.three`）。
+- 无头 Chrome 实测（中/日文 × 默认 / 开启公司负担 + 扶养 3 人 / 工资页勾选介护 + 手动调整住民税）全部 **1 页**，最长的内容约在页高 87% 处（可用区域到约 94%），余量约 7%。**改打印样式或往这两页加内容后必须重测**（见下文验证办法）。
 
 ## 6. 其他工具要点
 
@@ -193,7 +200,7 @@ npm run build
 ```
 
 - `vue-tsc`：通过。
-- 自动化测试：**42/42 通过**（`practical-tools` 13、`regression` 11、`takken` 14、`deploy-config` 4）。
+- 自动化测试：**45/45 通过**（`practical-tools` 16、`regression` 11、`takken` 14、`deploy-config` 4）。
 - `npm run build`：通过，转换 2,082 个模块；主 JS 约 1,045 KB、CSS 约 419 KB，仍有“chunk 超过 500 kB”警告；`takkenQuestionModel` chunk 约 379 KB（含题库数据）、`HighlySkilledView` 约 256 KB、`TakkenTopicsView` 约 223 KB；jsPDF/html2canvas 为独立懒加载 chunk。
 - 默认构建的 `dist/index.html` 资源路径为 `/server/assets/...`（`VITE_BASE_PATH` 未设置时的默认值）。
 - `git diff --check`、`npm ci --dry-run`（锁文件与 `package.json` 一致，服务器 `npm ci` 依赖它）通过。
@@ -204,6 +211,7 @@ npm run build
 ### 如何验证打印与 PDF（本次用过的办法）
 
 - **打印**：本地起 `vite`，用无头 Chrome 输出 PDF（macOS 路径 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`）：`--headless=new --virtual-time-budget=8000 --run-all-compositor-stages-before-draw --no-pdf-header-footer --print-to-pdf=out.pdf <url>`；去掉 `--no-pdf-header-footer` 可检查浏览器页眉页脚是否压到正文。再用 PyMuPDF（`pip install pymupdf`，建议放临时 venv）逐页渲染成图看，并按 `words` 坐标量页眉/正文/页脚的间距。
+- **打印前要改页面状态**（开“计入公司负担”、改扶养人数、勾选介护……）：用 `--remote-debugging-port` 起无头 Chrome，Node 内置 `WebSocket` 调 CDP —— `Runtime.evaluate` 操作页面，再 `Page.printToPDF`。两个坑：**不要**调 `Emulation.setEmulatedMedia`（设成 screen 会输出屏幕样式，页数完全不对）；Element Plus 数字框的加减按钮响应 `mousedown` 而不是 `click`，改数值请对 `<input>` 设值并派发 `input` 事件。
 - **PDF 下载**：在页面里包住 `URL.createObjectURL` 截获 Blob 并让 `HTMLAnchorElement.click` 变成空操作，点“下载 PDF”，再把 Blob 用 `fetch` POST 到本地小接收服务，用 PyMuPDF 检查页数、图片尺寸、渲染效果。
 
 ## 10. 部署和上线
@@ -283,6 +291,7 @@ bash scripts/deploy.sh <分支|标签|提交>
 ## 13. 接手时不要做的事
 
 - 不要恢复高度人才/租房报告的打印按钮或 `report-print-compact` 那套“缩放到一页”的打印机制；页面级打印只保留 `index.css` 末尾那份精简样式。
+- 不要把说明段落、信息提示框、免责声明（`FinancialDisclaimer` 已删除）加回工资/役员报酬页、打印件和 PDF；业主 2026-09-26 明确要求去掉。
 - 不要给役员报酬重新加公司利润、法人税、多方案对比；不要重做年金估算，除非基于完整的再评价率与个人履历。
 - 不要把 `VITE_BASE_PATH` 的默认值改成 `/`：线上是 `/server/`，`vite.base-path.ts`、`frontend/Dockerfile`、`docker-compose.yml` 三处默认必须一致（有测试守着），否则没有 `.env` 的服务器下次部署会白屏（第 10.2 节）。
 - 不要把输入框聚焦圈改回 `box-shadow`，不要删掉 `.el-popper` 的圆角规则（第 3.3 节）。
@@ -300,7 +309,7 @@ bash scripts/deploy.sh <分支|标签|提交>
 - 业主会在服务器和自己的浏览器里验证。遇到“部署后没变化/问题又出现”，先排查**是否合并了 `main`、服务器提交号、浏览器缓存**，再怀疑代码；用本地生产构建（`vite preview`，注意 `/server/` 前缀）复现，别只看开发服务器。
 - “上传”指：提交 → 推送特性分支 → 合并到 `main` → 推送 `main`，并给出服务器命令。
 - 汇报要**区分已验证与推测**；无法复现的问题要如实说明并请业主提供浏览器/截图，不要编造根因。
-- 修改财务/税务相关文案或数字时，保持“概算”口径与免责声明，并同步中日双语与测试。
+- 修改财务/税务相关文案或数字时，保持“概算”口径（作为项目名里的标签），并同步中日双语与测试；面向客户的页面/打印/PDF 不要加回说明段落或免责声明。
 
 ## 15. 从提交历史推断的产品意图
 

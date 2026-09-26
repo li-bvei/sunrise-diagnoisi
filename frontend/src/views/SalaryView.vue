@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import PracticalToolHero from '@/components/practical/PracticalToolHero.vue'
-import FinancialDisclaimer from '@/components/practical/FinancialDisclaimer.vue'
+import PrintHeader from '@/components/practical/PrintHeader.vue'
 import MetricCard from '@/components/practical/MetricCard.vue'
 import { practicalToolMessages } from '@/data/practicalToolMessages'
 import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
 import { useSettingsStore } from '@/stores/settings'
 import { calculatePayroll, formatYen } from '@/utils/financialCalculator'
 import { formatIncomeManYen, parseIncomeManYenInput } from '@/utils/numericInput'
+import { issueDate } from '@/utils/dateStamp'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
@@ -42,14 +43,27 @@ function toggleResidentAdjust() {
   residentOverride.value = residentOverride.value === null ? (result.value?.residentTaxMonthly ?? 0) : null
 }
 
+// The inputs behind the figures, printed above the tables (the input form itself is not printed).
+const conditionLines = computed(() => [
+  [
+    `${copy.value.common.salary}：${money(form.monthlySalary ?? 0)}`,
+    `${copy.value.common.age}：${form.age}${copy.value.payslip.ageUnit}`,
+    `${copy.value.common.prefecture}：${form.prefecture}`,
+    `${copy.value.common.dependents}：${form.dependentCount}${copy.value.payslip.peopleUnit}`,
+    ...(form.includeCare ? [copy.value.payslip.careIncluded] : []),
+  ].join('　'),
+  issueDate(),
+])
+
 watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { immediate: true })
 </script>
 
 <template>
   <div class="page-surface">
-    <PracticalToolHero :eyebrow="copy.salary.eyebrow" :title="copy.salary.title" :description="copy.salary.description" />
+    <PracticalToolHero class="no-print" :eyebrow="copy.salary.eyebrow" :title="copy.salary.title" :description="copy.salary.description" />
     <section class="section practical-section"><div class="container practical-stack">
-      <el-card shadow="never" class="practical-panel">
+      <PrintHeader v-if="result" :title="copy.salary.reportName" :brand="settings.dictionary.brand" :lines="conditionLines" />
+      <el-card shadow="never" class="practical-panel no-print">
         <template #header>{{ copy.common.input }}</template>
         <el-form label-position="top">
           <div class="practical-form-grid">
@@ -122,7 +136,7 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
                     <span class="payslip-label-with-tag">
                       {{ copy.salary.residentTax }}
                       <em v-if="result.residentTaxIsEstimated" class="inline-tag">{{ copy.common.estimated }}</em>
-                      <button type="button" class="inline-btn" @click="toggleResidentAdjust">
+                      <button type="button" class="inline-btn no-print" @click="toggleResidentAdjust">
                         {{ result.residentTaxIsEstimated ? copy.common.adjust : copy.common.reset }}
                       </button>
                     </span>
@@ -149,7 +163,6 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
               </tfoot>
             </table>
           </div>
-          <p v-if="result.residentTaxIsEstimated" class="panel-note">{{ copy.salary.residentHint }}</p>
         </el-card>
 
         <el-card shadow="never" class="practical-panel">
@@ -178,8 +191,6 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
         </div>
       </template>
       <el-empty v-else :description="copy.common.empty" />
-
-      <FinancialDisclaimer />
     </div></section>
   </div>
 </template>
@@ -190,6 +201,7 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
 .inline-btn:hover { text-decoration: underline; text-underline-offset: 2px; }
 .inline-input { display: inline-flex; align-items: center; gap: 6px; }
 .inline-input .el-input-number { width: 110px; }
+@media print { .inline-input :deep(.el-input__wrapper) { border-color: transparent; background: transparent; } }
 .panel-note { margin: 14px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .field-help { margin: 7px 0 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; }
 .grade-tile { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); background: #f5f5f7; }
