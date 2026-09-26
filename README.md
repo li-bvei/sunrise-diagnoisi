@@ -131,9 +131,9 @@ docker compose logs -f --tail=100
 首次部署（只做一次）：
 
 1. 在宝塔「数据库」里新建数据库和用户，权限选「本地服务器」。
-2. 在服务器项目根目录的 `.env` 里加上 `TAKKEN_DB_NAME` / `TAKKEN_DB_USER` / `TAKKEN_DB_PASSWORD` / `TAKKEN_ADMIN_TOKEN`（见 `.env.example`）。容器通过 unix socket 连接宿主机 MySQL，默认路径 `/tmp/mysql.sock`，不同的话加 `TAKKEN_DB_SOCKET=<路径>`。
+2. 在服务器项目根目录**新建 `.env`**（不是修改 `.env.example`——它被 git 跟踪，每次部署都会被还原成空模板；`.env` 被忽略，部署不会动它），加上 `TAKKEN_DB_NAME` / `TAKKEN_DB_USER` / `TAKKEN_DB_PASSWORD` / `TAKKEN_ADMIN_TOKEN`（见 `.env.example`）。容器通过 unix socket 连接宿主机 MySQL，默认路径 `/tmp/mysql.sock`，不同的话加 `TAKKEN_DB_SOCKET=<路径>`。
 3. `bash scripts/deploy.sh`——脚本会先检查这些配置和 socket 是否存在，再启动 `takken-api` 和 `web` 两个容器；表会在 API 首次启动时自动创建。
-4. **导入种子数据**：在宝塔「数据库」里找到这个库，点「导入」，上传仓库里的 [`server/seed/takken-seed.sql`](server/seed/takken-seed.sql)（当前全部错题和考点，会自动建表并写入）。可以重复导入：按 id 覆盖内容，「重点关注」的错误次数只增不减。之后新增内容用 `frontend/scripts/upsert-takken-*.mjs`（配置见 [`docs/TAKKEN_DATA_WORKFLOW.md`](docs/TAKKEN_DATA_WORKFLOW.md)）。
+4. **导入种子数据**：在宝塔「数据库」里找到这个库，点「导入」，上传仓库里的 [`server/seed/takken-seed.sql`](server/seed/takken-seed.sql)（当前全部错题和考点，会自动建表并写入）。**只补缺的、绝不覆盖**：数据库里已有的 id 完全不动，所以在数据库里改过内容后再导入也不会被冲掉，可以放心重复导入。想用文件内容强制覆盖某些条目，改用 `upsert-takken-*.mjs --import`。之后新增内容用 `frontend/scripts/upsert-takken-*.mjs`（配置见 [`docs/TAKKEN_DATA_WORKFLOW.md`](docs/TAKKEN_DATA_WORKFLOW.md)）。
 
 种子文件由 `cd frontend && npm run takken:seed` 从 `frontend/src/data/takken-*.json` 生成；想让它反映数据库最新内容，先 `npm run takken:export` 再 `npm run takken:seed`。
 

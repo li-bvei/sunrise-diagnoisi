@@ -175,7 +175,7 @@ frontend/src/
 | 院校名单 | `data/universities/officialUniversities.ts` | 390 条、37 个国家/地区，脚本 `scripts/extract_official_universities.py` 生成 |
 | 宅建错题 | 宝塔 MySQL `takken_questions`（备份：`data/takken-questions.json`） | 备份快照 156 题，ID 无重复；线上以数据库为准 |
 | 宅建考点 | 宝塔 MySQL `takken_topics`（备份：`data/takken-topics.json`） | 备份快照 156 个，其中 `examSprint` 6 个；线上以数据库为准 |
-| 宅建种子文件 | `server/seed/takken-seed.sql` | 由 `npm run takken:seed` 从两个 JSON 备份生成；宝塔「导入」即可初始化/恢复数据库，可重复导入 |
+| 宅建种子文件 | `server/seed/takken-seed.sql` | 由 `npm run takken:seed` 从两个 JSON 备份生成；宝塔「导入」即可初始化数据库；只补缺失的 id、绝不覆盖已有内容，可重复导入 |
 
 题库/考点是法律与考试业务数据，自动测试只验证结构与交互，**不能替代人工核对法条版本和答案**。数量会持续变化，线上数量以数据库为准，需要时调 `GET /api/takken/questions` 现查，不要凭本表假设。
 

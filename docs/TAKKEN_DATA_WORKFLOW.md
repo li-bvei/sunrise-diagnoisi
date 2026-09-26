@@ -123,7 +123,7 @@ cd frontend
 npm run takken:seed        # 由两个 JSON 备份生成 server/seed/takken-seed.sql
 ```
 
-生成的 `server/seed/takken-seed.sql` 是一个普通 SQL 文件（建表 + 全部错题和考点），在**宝塔「数据库 → 导入」**里上传即可，不需要令牌和脚本。可以重复导入：按 `id` 覆盖内容，`times_reported`（重点关注计数）只增不减，不会把数据库里已累积的计数冲掉。想让种子反映数据库最新内容，先 `npm run takken:export` 再 `npm run takken:seed`，然后提交这两个 JSON 和 SQL 文件。
+生成的 `server/seed/takken-seed.sql` 是一个普通 SQL 文件（建表 + 全部错题和考点），在**宝塔「数据库 → 导入」**里上传即可，不需要令牌和脚本。**只补缺的、绝不覆盖**：数据库里已有的 `id` 完全不动（不覆盖内容、不改 `times_reported`），所以数据库是唯一的数据源，种子只是快照，怎么导入都不会冲掉数据库里的修改。要用 JSON 强制覆盖数据库里的条目，用 `upsert-takken-*.mjs --import`。想让种子反映数据库最新内容，先 `npm run takken:export` 再 `npm run takken:seed`，然后提交这两个 JSON 和 SQL 文件。
 
 ## 五、常见问题
 

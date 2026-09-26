@@ -25,6 +25,17 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> 仓库目录：$(pwd)"
 
 # 1. 拉取最新代码
+# 服务器上被 git 跟踪的文件（含 .env.example、docker-compose.yml）会被下面的 reset --hard 还原。
+# 如果发现有人在服务器上改过它们，先把改动存成补丁再继续，并明确提示，避免"填好的配置部署一次就变空"。
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  mkdir -p .deploy-backups
+  PATCH=".deploy-backups/local-changes-$(date +%Y%m%d-%H%M%S).patch"
+  git diff HEAD > "${PATCH}"
+  echo "!! 检测到服务器上有未提交的改动，本次部署会把它们还原（已备份为 ${PATCH}）：" >&2
+  git status --short --untracked-files=no >&2
+  echo "   配置请写在项目根目录的 .env（被 git 忽略，部署不会动它），不要改 .env.example 等被跟踪的文件。" >&2
+fi
+
 git fetch --prune origin
 # 短分支名（如 main）补成 origin/<name>；标签 / 完整提交号原样使用
 if git rev-parse --verify --quiet "origin/${REF}" >/dev/null; then
@@ -37,6 +48,10 @@ git reset --hard "${TARGET}"
 git --no-pager log -1 --format='==> 当前提交：%h %s (%ci)'
 
 # 2. 部署前检查：题库 API 需要 .env 里的数据库配置，以及宿主机上的 MySQL socket
+if [ ! -f .env ]; then
+  echo "!! 找不到项目根目录的 .env。.env.example 只是模板，请新建 .env 并写入 TAKKEN_DB_NAME / TAKKEN_DB_USER / TAKKEN_DB_PASSWORD / TAKKEN_ADMIN_TOKEN（不要直接改 .env.example，部署会把它还原）。" >&2
+  exit 1
+fi
 env_value() { grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d= -f2- || true; }
 for key in TAKKEN_DB_NAME TAKKEN_DB_USER TAKKEN_DB_PASSWORD; do
   if [ -z "$(env_value "${key}")" ]; then

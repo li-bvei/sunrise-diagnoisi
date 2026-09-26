@@ -10,3 +10,4 @@ Thumbs.db
 # takken API server
 server/node_modules/
 frontend/.env.takken
+.deploy-backups/

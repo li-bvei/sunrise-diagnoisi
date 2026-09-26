@@ -4,9 +4,11 @@
  * file that creates the two tables and loads every question and topic. Import it in 宝塔 (数据库 → 导入)
  * or with `mysql <db> < takken-seed.sql` — no token, no scripts, no API needed.
  *
- * Safe to re-run against a database that already has data: rows are matched by id and their content is
- * refreshed, while `times_reported` only ever goes UP (GREATEST), so re-importing an old seed can never
- * wipe out a "重点关注" count that accumulated in the database since.
+ * Non-destructive by design: the database is the source of truth, and this file is only a snapshot of it.
+ * Rows whose id already exists are left completely untouched (`ON DUPLICATE KEY UPDATE id = id` is a
+ * no-op), so importing the seed — even an old one, even repeatedly — can never overwrite content that was
+ * edited in the database or reset a "重点关注" count. It only fills in ids that are missing. To deliberately
+ * overwrite existing rows from a JSON file, use `upsert-takken-*.mjs --import` instead.
  *
  * Usage:  node server/make-seed.mjs      (dependency-free; run `npm run takken:seed` from frontend/)
  */
@@ -37,10 +39,10 @@ function insertStatements(kind, entries) {
     const { timesReported, ...data } = entry
     const json = sqlString(JSON.stringify(data))
     if (!counted) {
-      return `INSERT INTO \`${name}\` (id, data) VALUES (${sqlString(entry.id)}, ${json}) ON DUPLICATE KEY UPDATE data = VALUES(data);`
+      return `INSERT INTO \`${name}\` (id, data) VALUES (${sqlString(entry.id)}, ${json}) ON DUPLICATE KEY UPDATE id = id;`
     }
     const count = Number.isInteger(timesReported) && timesReported >= 1 ? timesReported : 1
-    return `INSERT INTO \`${name}\` (id, data, times_reported) VALUES (${sqlString(entry.id)}, ${json}, ${count}) ON DUPLICATE KEY UPDATE data = VALUES(data), times_reported = GREATEST(times_reported, VALUES(times_reported));`
+    return `INSERT INTO \`${name}\` (id, data, times_reported) VALUES (${sqlString(entry.id)}, ${json}, ${count}) ON DUPLICATE KEY UPDATE id = id;`
   })
 }
 
@@ -49,7 +51,7 @@ const topics = JSON.parse(readFileSync(resolve(dataDir, 'takken-topics.json'), '
 
 const lines = [
   '-- 宅建题库种子文件（自动生成，请勿手改；由 server/make-seed.mjs 从 frontend/src/data/takken-*.json 生成）',
-  `-- 错题 ${questions.length} 题，考点 ${topics.length} 条。可重复导入：按 id 覆盖内容，错误次数只增不减。`,
+  `-- 错题 ${questions.length} 题，考点 ${topics.length} 条。只补缺的：数据库里已有的 id 完全不动（不覆盖内容、不改错误次数），可放心重复导入。`,
   '-- 用法：宝塔「数据库」→ 对应数据库「导入」→ 上传本文件；或 mysql <库名> < takken-seed.sql',
   '',
   'SET NAMES utf8mb4;',
