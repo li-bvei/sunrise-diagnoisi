@@ -10,7 +10,7 @@
 | 正文条目 | 现状 | 说明 |
 | --- | --- | --- |
 | 1. P0 部署 `base` 路径 | **已完成（2026-09-26）** | `VITE_BASE_PATH` 现已生效，**不设置默认 `/server/`**（线上产物逐字节不变）；非法值构建报错；有 `tests/deploy-config.test.mjs`。未做的是“根路径 / 子路径两种构建各跑一遍的 CI smoke test”（无 CI）。见 `PROJECT_HANDOFF.md` 第 10.2 节 |
-| 2. 测试合并为单一命令 | **已完成** | `npm test` = `vue-tsc -b && node --test tests/*.test.mjs`，当前 45 项；未拆 `test:regression` 等子脚本；无 CI |
+| 2. 测试合并为单一命令 | **已完成** | `npm test` = `vue-tsc -b && node --test tests/*.test.mjs`，当前 46 项；未拆 `test:regression` 等子脚本；无 CI |
 | 3. 统一项目事实文档 | **部分** | 工具数已统一为 7；`README.md` 的 `base` 表述已改正；`DEVELOPMENT.md` 早期章节仍是历史计划 |
 | 4. 移动端任务路径 | **部分** | 首页列表式入口、移动菜单遮罩/焦点、分步进度条已做；表单校验仍是顶部弹窗提示（未做字段旁校验）；刷题页可从 URL 读初始筛选，考点页“考前冲刺”开关会写回 `?sprint=1` |
 | 5. 数据安全（出入境） | **部分** | 本地日期修复、删除确认、导出反馈、本地存储提示已做；**导入 CSV / 清空全部数据入口未做** |

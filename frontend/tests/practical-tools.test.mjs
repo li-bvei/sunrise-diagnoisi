@@ -321,6 +321,22 @@ test('the printed page is one A4 sheet: a print-only header replaces the input f
   assert.match(printBlock, /\.practical-metrics\.three/)
 })
 
+test('select / picker panels stay inside their own border and shadow', () => {
+  const styles = read('../src/styles/index.css')
+  // The panel is two boxes: the outer .el-popper draws border + shadow, the inner box the white
+  // background. Their corners must share one curve...
+  assert.match(styles, /^\.el-popper \{ border-radius: var\(--radius-sm\); \}$/m)
+  // ...and their widths must agree. Every Element Plus popper carries role="tooltip", and the inner
+  // select box gets min-width = the select's width, so a 420px cap on ALL poppers let a select wider
+  // than 420px overflow its own white background and shadow. Only real (dark) tooltips are capped that hard.
+  assert.doesNotMatch(styles, /\.el-popper\[role="tooltip"\] \{[^}]*min\(420px/)
+  assert.match(styles, /\.el-popper\.is-dark\[role="tooltip"\] \{ max-width: min\(420px, calc\(100vw - 32px\)\); \}/)
+  // the focus ring is a real border colour, never an inset box-shadow that can paint past the box
+  const focusRule = styles.match(/\.el-input__wrapper\.is-focus, \.el-select__wrapper\.is-focused \{[^}]*\}/)?.[0] ?? ''
+  assert.match(focusRule, /border-color/)
+  assert.doesNotMatch(focusRule, /box-shadow/)
+})
+
 test('printing the page (Cmd+P) no longer prints the app shell or splits a panel in half', () => {
   const styles = read('../src/styles/index.css')
   const printBlock = styles.slice(styles.indexOf('@media print'), styles.indexOf('@media (prefers-reduced-motion'))

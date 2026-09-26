@@ -12,7 +12,7 @@
 - 前端有 **7 个工具**、**5 个业务分类**：高度人才积分（含 J-Skip）、永住条件、租房初期费用、工资/社保/到手、役员报酬、在日天数记录、宅建刷题。宅建考点速查、薄弱分析是辅助路由，不计入工具数。
 - 全部是**前端本地计算**。没有 API、没有数据库，姓名/电话等只存在当前页面状态。`localStorage` 只存语言偏好、宅建学习记录和出入境记录（见第 8 节）。
 - 界面已统一为 **Apple 风格设计系统**；工资和役员报酬的明细是**日本工资单（給与明細）表格**，役员报酬的月額/年額表各有独立的 **PDF 和 CSV 下载**。
-- 代码已通过：`vue-tsc`、**45 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
+- 代码已通过：`vue-tsc`、**46 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
 - **构建路径已修复（2026-09-26）**：`VITE_BASE_PATH` 现在真正生效，**不设置时默认 `/server/`**（与线上一致），所以部署命令和服务器配置都不用动；要换根路径只需在服务器 `.env` 写 `VITE_BASE_PATH=/`（第 10.2 节）。
 - 服务器更新流程是：**合并到 `main` → 服务器执行 `bash scripts/deploy.sh` → 浏览器强制刷新**。只推分支不会被部署（第 10、11 节）。
 - 法律页（隐私/条款/免责）仍是占位；咨询留资流程只有方案、没有实现（第 14 节）。
@@ -70,8 +70,9 @@ frontend/src/
 - 全站样式集中在 `frontend/src/styles/index.css`，靠 CSS 变量（`--color-*`、`--radius-*`、`--shadow-*`）驱动；保留原有 class 名，所有页面自动继承。Element Plus 通过 `--el-*` 变量与少量覆盖规则对齐。
 - **输入/下拉框**：`.el-input__wrapper / .el-select__wrapper / .el-textarea__inner` 用 `1px solid` 边框 + `overflow: hidden`，聚焦只改 `border-color`；不要改回 `box-shadow` 环。
 - **下拉面板**：白底、边框、阴影都画在外层 `.el-popper` 上，它的圆角必须与内层一致（现为 `.el-popper { border-radius: var(--radius-sm) }`）。Element Plus 默认 4px，而内层跟随我们的 10px，两者不一致会让阴影在圆角处“漏”出白底。
+- **下拉面板的宽度**：Element Plus 的所有弹层外层都带 `role="tooltip"`，且 select 的内层白框 `min-width` 等于选择框宽度。所以**不能**给全部 `.el-popper[role="tooltip"]` 设 `max-width: 420px`——窗口够宽、选择框超过 420px 时，内层就会比外层宽出一截，选中项的高亮条和滚动条区域伸到白底和阴影外面（2026-09-26 业主反馈“加入都道府県的背景和阴影有偏差”，就是它；此前只修了圆角）。现在只有 `.el-popper.is-dark[role="tooltip"]`（文字提示）限 420px。验证要在**宽窗口（≥1024px，选择框 >420px）**下打开下拉框，比较外层与内层的 `getBoundingClientRect()`。
 - Element Plus 的弹层（select、date-picker、tooltip）**被传送到 `<body>`，不在 `#app` 内**；调试时对 `#app` 做 `transform` 不会影响它们。
-- `frontend/tests/*.test.mjs` 会对 `index.css` 做**源码断言**（例如不得出现 `report-print-compact`、聚焦规则不得含 `box-shadow`、`.el-popper` 圆角规则必须存在）。改样式时先看这些断言，别为了过测试而删测试。
+- `frontend/tests/*.test.mjs` 会对 `index.css` 做**源码断言**（例如不得出现 `report-print-compact`；聚焦规则不得含 `box-shadow`、`.el-popper` 圆角规则必须存在、弹层不得被全局限宽 420px——见 `practical-tools.test.mjs` 的“select / picker panels…”）。改样式时先看这些断言，别为了过测试而删测试。
 
 ## 4. 路由和功能清单
 
@@ -200,7 +201,7 @@ npm run build
 ```
 
 - `vue-tsc`：通过。
-- 自动化测试：**45/45 通过**（`practical-tools` 16、`regression` 11、`takken` 14、`deploy-config` 4）。
+- 自动化测试：**46/46 通过**（`practical-tools` 17、`regression` 11、`takken` 14、`deploy-config` 4）。
 - `npm run build`：通过，转换 2,082 个模块；主 JS 约 1,045 KB、CSS 约 419 KB，仍有“chunk 超过 500 kB”警告；`takkenQuestionModel` chunk 约 379 KB（含题库数据）、`HighlySkilledView` 约 256 KB、`TakkenTopicsView` 约 223 KB；jsPDF/html2canvas 为独立懒加载 chunk。
 - 默认构建的 `dist/index.html` 资源路径为 `/server/assets/...`（`VITE_BASE_PATH` 未设置时的默认值）。
 - `git diff --check`、`npm ci --dry-run`（锁文件与 `package.json` 一致，服务器 `npm ci` 依赖它）通过。

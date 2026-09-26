@@ -84,7 +84,12 @@ button, input, textarea, select { font: inherit; }
   font-family: var(--app-font-family);
 }
 .el-popper, .el-descriptions { font-family: var(--app-font-family); }
-.el-popper[role="tooltip"] { max-width: min(420px, calc(100vw - 32px)); line-height: 1.65; }
+.el-popper[role="tooltip"] { max-width: calc(100vw - 32px); line-height: 1.65; }
+/* Cap only text tooltips at 420px. Every Element Plus popper carries role="tooltip", and a select /
+   picker panel is at least as wide as its trigger (the inner box gets min-width = trigger width), so
+   capping the outer popper let the inner white box overflow its own border and shadow whenever the
+   select was wider than 420px. */
+.el-popper.is-dark[role="tooltip"] { max-width: min(420px, calc(100vw - 32px)); }
 /* The floating panel is two nested boxes: .el-popper carries the border + drop shadow,
    its child (.el-select-dropdown, .el-dropdown-menu, the date-picker panel, ...) paints
    the visible white background. .el-popper's own radius defaults to Element Plus's
