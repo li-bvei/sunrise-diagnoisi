@@ -9,7 +9,9 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vue-tsc -b && node --test tests/*.test.mjs",
     "takken:upsert": "node scripts/upsert-takken-questions.mjs",
-    "takken:topics:upsert": "node scripts/upsert-takken-topics.mjs"
+    "takken:topics:upsert": "node scripts/upsert-takken-topics.mjs",
+    "takken:export": "node scripts/export-takken.mjs",
+    "takken:seed": "node ../server/make-seed.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

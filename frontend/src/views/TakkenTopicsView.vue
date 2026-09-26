@@ -5,11 +5,11 @@ import { ArrowUp, Search, Star, WarningFilled } from '@element-plus/icons-vue'
 import TakkenBilingualText from '@/components/takken/TakkenBilingualText.vue'
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
 import TakkenTagFilter from '@/components/takken/TakkenTagFilter.vue'
-import rawTopics from '@/data/takken-topics.json'
 import type { TakkenTopic } from '@/types/takken'
+import { TAKKEN_TOPICS } from '@/utils/takkenData'
 import { classifyTakkenTag, takkenTagLabel, type TakkenCategory } from '@/utils/takkenCategories'
 
-const topics = rawTopics as TakkenTopic[]
+const topics = TAKKEN_TOPICS
 const allTags = topics.map((topic) => topic.tag)
 const sprintTopicCount = topics.filter((topic) => topic.examSprint).length
 

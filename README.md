@@ -12,6 +12,7 @@
 - Element Plus / Element Plus Icons
 - Axios（仅预留依赖，当前不发起 API 请求）
 - Nginx + Docker
+- 宅建题库 API：Node 22 + `mysql2`（`server/`），数据存宝塔 MySQL
 
 ## 项目目录
 
@@ -30,6 +31,7 @@ sunrise-diagnosis/
 │  │  └─ views/        页面
 │  ├─ Dockerfile
 │  └─ package.json
+├─ server/             宅建题库 API（Node + MySQL）与种子文件 seed/takken-seed.sql
 ├─ nginx/default.conf
 ├─ docker-compose.yml
 ├─ .env.example
@@ -82,7 +84,7 @@ docker compose logs -f --tail=100
 docker compose down
 ```
 
-Docker 预览地址为 `http://127.0.0.1:8090`。Node 仅在多阶段构建的第一阶段运行，生产容器由 Nginx 静态托管。
+Docker 预览地址为 `http://127.0.0.1:8090`。前端 `web` 容器由 Nginx 静态托管（Node 仅在多阶段构建的第一阶段运行）；宅建题库另有 `takken-api` 容器（Node），只能通过 `web` 容器的 `/api/` 访问，需要先配置数据库（见下文「题库 API 与数据库」，`docker compose up` 缺少数据库变量会直接报错）。
 
 ## 在服务器上更新部署
 
@@ -121,6 +123,21 @@ docker compose logs -f --tail=100
 - **访问路径由 `VITE_BASE_PATH` 决定，不设置时默认 `/server/`**（与线上 `https://www.sunrise-nskt.com/server/` 一致），所以按现在的方式部署**服务器不需要任何额外配置**。要改成根路径，在项目根目录 `.env`（与 `docker-compose.yml` 同级）写 `VITE_BASE_PATH=/` 后重新部署。根目录 `.env` 被 `.gitignore` 忽略，`reset --hard` 不会动它。详见下文「宝塔 / 宿主机 Nginx 反向代理」。
 - **回滚**：`bash scripts/deploy.sh <旧提交号>`，或手动 `git reset --hard <旧提交>` 后重新 `docker compose up -d --build`。
 - SSL / HTTPS 与对外域名由宝塔或宿主机 Nginx 处理，容器只监听 `127.0.0.1:8090`。
+
+## 题库 API 与数据库（宅建）
+
+宅建的错题库和考点速查存在**宝塔 MySQL**里，由 `server/` 下的小型 Node 服务（`takken-api` 容器）读写；前端进入宅建页面前先从 `/api/takken/questions`、`/api/takken/topics` 加载。这样多个人/多个窗口同时加内容也不会互相覆盖，新增内容**不需要重新构建部署**，刷新页面就能看到。`frontend/src/data/takken-*.json` 只是导出的备份快照，网站本身不再读取它们。
+
+首次部署（只做一次）：
+
+1. 在宝塔「数据库」里新建数据库和用户，权限选「本地服务器」。
+2. 在服务器项目根目录的 `.env` 里加上 `TAKKEN_DB_NAME` / `TAKKEN_DB_USER` / `TAKKEN_DB_PASSWORD` / `TAKKEN_ADMIN_TOKEN`（见 `.env.example`）。容器通过 unix socket 连接宿主机 MySQL，默认路径 `/tmp/mysql.sock`，不同的话加 `TAKKEN_DB_SOCKET=<路径>`。
+3. `bash scripts/deploy.sh`——脚本会先检查这些配置和 socket 是否存在，再启动 `takken-api` 和 `web` 两个容器；表会在 API 首次启动时自动创建。
+4. **导入种子数据**：在宝塔「数据库」里找到这个库，点「导入」，上传仓库里的 [`server/seed/takken-seed.sql`](server/seed/takken-seed.sql)（当前全部错题和考点，会自动建表并写入）。可以重复导入：按 id 覆盖内容，「重点关注」的错误次数只增不减。之后新增内容用 `frontend/scripts/upsert-takken-*.mjs`（配置见 [`docs/TAKKEN_DATA_WORKFLOW.md`](docs/TAKKEN_DATA_WORKFLOW.md)）。
+
+种子文件由 `cd frontend && npm run takken:seed` 从 `frontend/src/data/takken-*.json` 生成；想让它反映数据库最新内容，先 `npm run takken:export` 再 `npm run takken:seed`。
+
+本地开发前端时，`vite` 会把 `/api` 代理到 `http://127.0.0.1:3001`（可用 `TAKKEN_API_PROXY` 改成线上地址，只读）。
 
 ## 宝塔 / 宿主机 Nginx 反向代理
 
@@ -244,10 +261,11 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 - 客户资料与诊断记录保存（含结果页后置的可选咨询留资，取代早期表单前置收集姓名电话的设计）
 - 数据查看与使用量统计（当前 `frontend/src/utils/analytics.ts` 仅在开发环境打点、不落地，接入后端后再持久化）
 - 正式隐私政策、使用条款、联系方式与官网地址
+- 宅建刷题、考点速查、薄弱分析（题库与考点存宝塔 MySQL，可随时新增、无需重新部署，见「题库 API 与数据库」）
 
 ## 后续 Django / MySQL 建议结构
 
-后续可在项目根目录新增独立 `backend/`，并在 Compose 中增加 `api` 与 `db` 服务。前端继续只访问 `/api`，由宿主机或容器 Nginx 转发至 Django。后端按 `accounts`、`diagnoses`、`tools` 等业务域拆分，诊断规则使用可版本化的数据结构，避免与原 ERP 数据耦合。
+宅建题库已经有一个独立的小型 Node API（`server/`，使用宝塔 MySQL）。下面是**面向诊断/客户数据**的更大规划，与它相互独立：后续可在项目根目录新增独立 `backend/`，并在 Compose 中增加 `api` 与 `db` 服务。前端继续只访问 `/api`，由宿主机或容器 Nginx 转发至 Django。后端按 `accounts`、`diagnoses`、`tools` 等业务域拆分，诊断规则使用可版本化的数据结构，避免与原 ERP 数据耦合。
 
 ## 高度人才计算规则
 

@@ -3,16 +3,16 @@
 > 文档快照：2026-09-26（Asia/Tokyo）
 > 对应代码基线：`origin/main` 的 `323beb9` 及其后的 base 路径修复提交
 > 适用对象：接手项目的 AI、前端工程师、产品/业务负责人
-> 当前状态：可运行、已上线（Docker + 宿主机 Nginx，`/server/` 子路径）的 Vue 前台工具集合；没有后端、账号、数据库或案件管理
+> 当前状态：可运行、已上线（Docker + 宿主机 Nginx，`/server/` 子路径）的 Vue 前台工具集合；除宅建题库 API（`server/`，数据存宝塔 MySQL）外，没有其他后端、账号、数据库或案件管理
 
 > 本文档由一次会话对照**当前仓库实际状态**重写（提交历史、路由、测试、构建产物、部署配置、数据量均现场核对，数字见第 9 节）。它是时间点快照，不是永久事实：以后代码和本文档不一致时，以代码、测试和构建产物为准。
 
 ## 1. 先看结论
 
 - 前端有 **7 个工具**、**5 个业务分类**：高度人才积分（含 J-Skip）、永住条件、租房初期费用、工资/社保/到手、役员报酬、在日天数记录、宅建刷题。宅建考点速查、薄弱分析是辅助路由，不计入工具数。
-- 全部是**前端本地计算**。没有 API、没有数据库，姓名/电话等只存在当前页面状态。`localStorage` 只存语言偏好、宅建学习记录和出入境记录（见第 8 节）。
+- 诊断和计算类工具全部是**前端本地计算**，姓名/电话等只存在当前页面状态。**唯一的后端是宅建题库 API**（`server/`，Node + 宝塔 MySQL，只存宅建错题库和考点，不涉及任何客户数据）。`localStorage` 只存语言偏好、宅建学习记录和出入境记录（见第 8 节）。
 - 界面已统一为 **Apple 风格设计系统**；工资和役员报酬的明细是**日本工资单（給与明細）表格**，役员报酬的月額/年額表各有独立的 **PDF 和 CSV 下载**。
-- 代码已通过：`vue-tsc`、**48 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
+- 代码已通过：`vue-tsc`、**53 项自动化测试**、生产构建（2026-09-27 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
 - **构建路径已修复（2026-09-26）**：`VITE_BASE_PATH` 现在真正生效，**不设置时默认 `/server/`**（与线上一致），所以部署命令和服务器配置都不用动；要换根路径只需在服务器 `.env` 写 `VITE_BASE_PATH=/`（第 10.2 节）。
 - 服务器更新流程是：**合并到 `main` → 服务器执行 `bash scripts/deploy.sh` → 浏览器强制刷新**。只推分支不会被部署（第 10、11 节）。
 - 法律页（隐私/条款/免责）仍是占位；咨询留资流程只有方案、没有实现（第 14 节）。
@@ -44,8 +44,8 @@
 - Vite 5、Vue Router history、Pinia
 - Element Plus 与 Element Plus Icons
 - `html2canvas` + `jspdf`：仅用于役员报酬 PDF，**点击时才动态加载**，不进主包
-- Axios 仅作预留依赖，当前没有任何 API 请求
-- Nginx 静态托管、Docker 多阶段构建
+- Axios 仅作预留依赖；宅建页面用原生 `fetch` 从 `/api/takken/...` 加载题库（`utils/takkenData.ts`，由路由守卫在进入宅建路由前 await）
+- Nginx 静态托管、Docker 多阶段构建；`server/` 是宅建题库 API（Node 22 + `mysql2`，独立容器 `takken-api`，经 unix socket 连宝塔 MySQL）
 - 测试：Node test runner + esbuild 打包 + `vue-tsc`
 
 ### 3.2 目录职责
@@ -63,7 +63,7 @@ frontend/src/
 └─ views/       页面级工具和静态页面
 ```
 
-项目主体是前端本地计算，没有服务端领域层。入管、税务、社保规则直接存在 `utils/` 与 `data/` 中。
+项目主体是前端本地计算，没有服务端领域层。入管、税务、社保规则直接存在 `utils/` 与 `data/` 中。`server/` 只负责宅建题库/考点的读写（`index.mjs` 接口、`db.mjs` 存取、`validate.mjs` 校验、`schema.mjs` 表定义、`make-seed.mjs` 生成种子 SQL、`seed/takken-seed.sql` 种子文件）。
 
 ### 3.3 设计系统要点（改样式前必读）
 
@@ -162,7 +162,7 @@ frontend/src/
 - **永住**：`permanentResidenceCalculator.ts`（`2026-07`，依据令和 8 年 2 月 24 日改订指南），6 条路径；与高度人才数据模型相互独立。诊断前同样要姓名/电话。
 - **租房**：工作人员按实际收费逐项勾选并填金额，不做倍数/百分比推算；唯一自动量是“当月房租日割参考值”，必须点“填入参考值”才写入。**不要改成客户自助计算**。报告只在线预览。
 - **出入境记录**：`localStorage`，年度与指定期间统计；今日日期用本地日期；删除有确认；CSV 导出有成功/失败提示。**没有导入 CSV 和“清空全部数据”入口。**
-- **宅建**：错题库（`takken-questions.json`）与考点速查（`takken-topics.json`）；维护流程见 [`TAKKEN_DATA_WORKFLOW.md`](./TAKKEN_DATA_WORKFLOW.md)。**AI 会话不要用 Read/cat 整份读这两个 JSON**（体量大、CJK 占 token），用文档里的 `upsert` 脚本增改，只需提供新增内容。
+- **宅建**：错题库与考点速查**存在宝塔 MySQL 里**（表 `takken_questions` / `takken_topics`），前端通过 `/api/takken/...` 读取；增改用 `frontend/scripts/upsert-takken-*.mjs`（调 API，需要 `TAKKEN_API_URL` 和令牌），写入后刷新即生效，**不需要提交或部署**。`frontend/src/data/takken-*.json` 只是导出的备份快照，网站不再读取，**不要手改**。维护流程见 [`TAKKEN_DATA_WORKFLOW.md`](./TAKKEN_DATA_WORKFLOW.md)。
 
 ## 7. 主要数据和规则
 
@@ -173,10 +173,11 @@ frontend/src/
 | 工资/社保/役员报酬 | `utils/financialCalculator.ts` + `data/financialParameters.ts` | 简化估算，见第 5 节 |
 | 官方来源 | `data/officialSources.ts` | 集中维护入管厅链接（未在线复核） |
 | 院校名单 | `data/universities/officialUniversities.ts` | 390 条、37 个国家/地区，脚本 `scripts/extract_official_universities.py` 生成 |
-| 宅建错题 | `data/takken-questions.json` | **143 题**，ID 无重复 |
-| 宅建考点 | `data/takken-topics.json` | **143 个**，其中 `examSprint` 6 个，ID 无重复 |
+| 宅建错题 | 宝塔 MySQL `takken_questions`（备份：`data/takken-questions.json`） | 备份快照 156 题，ID 无重复；线上以数据库为准 |
+| 宅建考点 | 宝塔 MySQL `takken_topics`（备份：`data/takken-topics.json`） | 备份快照 156 个，其中 `examSprint` 6 个；线上以数据库为准 |
+| 宅建种子文件 | `server/seed/takken-seed.sql` | 由 `npm run takken:seed` 从两个 JSON 备份生成；宝塔「导入」即可初始化/恢复数据库，可重复导入 |
 
-题库/考点是法律与考试业务数据，自动测试只验证结构与交互，**不能替代人工核对法条版本和答案**。数量会持续变化，需要时用 `TAKKEN_DATA_WORKFLOW.md` 里的命令现查，不要凭本表假设。
+题库/考点是法律与考试业务数据，自动测试只验证结构与交互，**不能替代人工核对法条版本和答案**。数量会持续变化，线上数量以数据库为准，需要时调 `GET /api/takken/questions` 现查，不要凭本表假设。
 
 ## 8. 浏览器本地存储
 
@@ -193,7 +194,7 @@ frontend/src/
 
 ## 9. 当前验证结果
 
-2026-09-26 在 `main` 工作区实测：
+2026-09-27 在工作区实测（宅建题库改为 API + MySQL 之后）：
 
 ```bash
 cd frontend
@@ -202,11 +203,13 @@ npm run build
 ```
 
 - `vue-tsc`：通过。
-- 自动化测试：**48/48 通过**（`practical-tools` 19、`regression` 11、`takken` 14、`deploy-config` 4）。
-- `npm run build`：通过，转换 2,082 个模块；主 JS 约 1,045 KB、CSS 约 419 KB，仍有“chunk 超过 500 kB”警告；`takkenQuestionModel` chunk 约 379 KB（含题库数据）、`HighlySkilledView` 约 256 KB、`TakkenTopicsView` 约 223 KB；jsPDF/html2canvas 为独立懒加载 chunk。
+- 自动化测试：**53/53 通过**（`practical-tools` 19、`regression` 11、`takken` 15、`takken-server` 4、`deploy-config` 4）。
+- `npm run build`：通过，转换 2,082 个模块；主 JS 约 1,045 KB、CSS 约 419 KB，仍有“chunk 超过 500 kB”警告；题库和考点数据已不再打进前端包（`TakkenTopicsView` 约 6 KB，`takkenQuestionModel` 不再是大 chunk），`HighlySkilledView` 约 231 KB；jsPDF/html2canvas 为独立懒加载 chunk。
 - 默认构建的 `dist/index.html` 资源路径为 `/server/assets/...`（`VITE_BASE_PATH` 未设置时的默认值）。
 - `git diff --check`、`npm ci --dry-run`（锁文件与 `package.json` 一致，服务器 `npm ci` 依赖它）通过。
 - `npm audit --omit=dev`：1 项 high，`nanoid <3.3.18`，来自 `vite → postcss`，属**构建期**依赖，不会打进浏览器代码；未处理。
+
+**宅建题库 API 的验证边界**：用本机临时 MySQL（unix socket、仅 localhost 用户）做过端到端验证——种子 SQL 导入与重复导入、并发计数、导出与 JSON 逐条一致、页面加载与 API 不可用时的提示；**真实服务器上的 `docker compose`、socket 挂载和宝塔权限没有验证过**，首次部署请按 README「题库 API 与数据库」逐步核对。
 
 **验证边界（未覆盖，不能写成已通过）**：没有端到端浏览器测试、真机移动端测试；打印和 PDF 下载只在 2026-09-26 手工验证过（见下），没有自动化；`extract_official_universities.py --check` 需要 `pdfplumber`，本机未装；没有 `shellcheck`；`officialSources.ts` 的外部链接未逐个联网复核。
 
@@ -220,7 +223,9 @@ npm run build
 
 ### 10.1 服务器更新流程
 
-服务器把仓库 clone 在站点目录（示例 `/www/wwwroot/sunrise-diagnoisi`）。宿主机 Nginx（宝塔）把 `/server/` 反向代理到容器 `127.0.0.1:8090`，容器内 Nginx 静态托管 `dist`，容器名 `sunrise-diagnosis-web`，健康检查 `/healthz`。
+服务器把仓库 clone 在站点目录（示例 `/www/wwwroot/sunrise-diagnoisi`）。宿主机 Nginx（宝塔）把 `/server/` 反向代理到容器 `127.0.0.1:8090`，容器内 Nginx 静态托管 `dist`，容器名 `sunrise-diagnosis-web`，健康检查 `/healthz`，并把 `/api/` 转发给同一 Compose 网络里的题库 API 容器 `sunrise-takken-api`（不对外发布端口，健康检查 `/api/health`）。API 通过挂载宿主机 MySQL 的 unix socket（默认 `/tmp/mysql.sock`，可用 `TAKKEN_DB_SOCKET` 改）连接数据库，所以宝塔里的数据库用户权限选「本地服务器」即可。
+
+**首次部署前**必须在服务器根目录 `.env` 写 `TAKKEN_DB_NAME` / `TAKKEN_DB_USER` / `TAKKEN_DB_PASSWORD`（以及写入用的 `TAKKEN_ADMIN_TOKEN`），并在宝塔里导入种子文件 `server/seed/takken-seed.sql`；详见 README「题库 API 与数据库」。`deploy.sh` 缺少这些配置或找不到 socket 时会在构建前直接报错退出。
 
 ```bash
 cd /www/wwwroot/sunrise-diagnoisi
@@ -228,7 +233,7 @@ bash scripts/deploy.sh              # 默认 origin/main
 bash scripts/deploy.sh <分支|标签|提交>
 ```
 
-`scripts/deploy.sh`：`git fetch --prune` → `git reset --hard <ref>` → `docker compose up -d --build --remove-orphans` → `docker image prune -f` → 等待健康检查 `healthy` → `docker compose ps`。健康检查失败会打印容器日志并以非零码退出。`reset --hard` 会覆盖服务器上已跟踪文件的本地改动，**服务器只作部署目标**；根目录 `.env` 被忽略，不受影响。上次实测构建约 56 秒（含 `npm ci`），新增 PDF 依赖会略增。
+`scripts/deploy.sh`：`git fetch --prune` → `git reset --hard <ref>` → 检查 `.env` 数据库配置与 MySQL socket → `docker compose up -d --build --remove-orphans` → `docker image prune -f` → 等待两个容器（`takken-api`、`web`）健康检查 `healthy` → `docker compose ps`。健康检查失败会打印容器日志并以非零码退出。`reset --hard` 会覆盖服务器上已跟踪文件的本地改动，**服务器只作部署目标**；根目录 `.env` 被忽略，不受影响。上次实测构建约 56 秒（含 `npm ci`），新增 PDF 依赖会略增。
 
 要点：
 

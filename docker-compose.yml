@@ -9,9 +9,30 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:80"
+    depends_on:
+      - takken-api
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  # Question bank / topics API backed by the 宝塔 MySQL on the host. Not published to any port: the web
+  # container's Nginx reaches it as http://takken-api:3001 over the compose network.
+  takken-api:
+    build:
+      context: server
+    container_name: sunrise-takken-api
+    restart: unless-stopped
+    environment:
+      # Connect over the host's MySQL unix socket: MySQL then sees a "localhost" client, so a database
+      # user created in 宝塔 with access limited to「本地服务器」works without opening MySQL to the network.
+      DB_SOCKET: /run/mysqld/mysql.sock
+      DB_NAME: ${TAKKEN_DB_NAME:?请在项目根目录 .env 中设置 TAKKEN_DB_NAME}
+      DB_USER: ${TAKKEN_DB_USER:?请在项目根目录 .env 中设置 TAKKEN_DB_USER}
+      DB_PASSWORD: ${TAKKEN_DB_PASSWORD:?请在项目根目录 .env 中设置 TAKKEN_DB_PASSWORD}
+      # Required for writes (adding questions/topics). Reads stay public. Leave unset to make it read-only.
+      TAKKEN_ADMIN_TOKEN: ${TAKKEN_ADMIN_TOKEN:-}
+    volumes:
+      - ${TAKKEN_DB_SOCKET:-/tmp/mysql.sock}:/run/mysqld/mysql.sock

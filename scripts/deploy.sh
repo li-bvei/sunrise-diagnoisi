@@ -18,6 +18,7 @@ set -euo pipefail
 
 REF="${1:-${DEPLOY_REF:-main}}"
 CONTAINER="sunrise-diagnosis-web"
+API_CONTAINER="sunrise-takken-api"
 
 # 切到仓库根目录（本脚本位于 <repo>/scripts/deploy.sh）
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -35,31 +36,51 @@ echo "==> 目标版本：${TARGET}"
 git reset --hard "${TARGET}"
 git --no-pager log -1 --format='==> 当前提交：%h %s (%ci)'
 
-# 2. 重新构建并启动容器
-docker compose up -d --build --remove-orphans
-
-# 3. 清理悬空镜像，避免旧构建层占满磁盘
-docker image prune -f >/dev/null || true
-
-# 4. 等待 Docker 健康检查通过
-echo "==> 等待容器就绪..."
-for i in $(seq 1 20); do
-  status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${CONTAINER}" 2>/dev/null || echo missing)"
-  if [ "${status}" = "healthy" ]; then
-    echo "==> 健康检查通过"
-    break
-  fi
-  if [ "${status}" = "none" ]; then
-    echo "==> 容器已启动（未配置健康检查）"
-    break
-  fi
-  if [ "${i}" -eq 20 ]; then
-    echo "!! 健康检查未通过（状态：${status}），最近日志：" >&2
-    docker compose logs --tail=50 web >&2
+# 2. 部署前检查：题库 API 需要 .env 里的数据库配置，以及宿主机上的 MySQL socket
+env_value() { grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d= -f2- || true; }
+for key in TAKKEN_DB_NAME TAKKEN_DB_USER TAKKEN_DB_PASSWORD; do
+  if [ -z "$(env_value "${key}")" ]; then
+    echo "!! 项目根目录 .env 缺少 ${key}（见 README「题库 API 与数据库」）" >&2
     exit 1
   fi
-  sleep 3
 done
+DB_SOCKET_PATH="$(env_value TAKKEN_DB_SOCKET)"
+DB_SOCKET_PATH="${DB_SOCKET_PATH:-/tmp/mysql.sock}"
+if [ ! -S "${DB_SOCKET_PATH}" ]; then
+  echo "!! 找不到 MySQL socket：${DB_SOCKET_PATH}" >&2
+  echo "   在服务器上用 \`mysqladmin variables | grep socket\` 或宝塔「数据库 → 设置」查实际路径，" >&2
+  echo "   然后在 .env 里写 TAKKEN_DB_SOCKET=<路径>。" >&2
+  exit 1
+fi
 
-# 5. 输出最终状态
+# 3. 重新构建并启动容器
+docker compose up -d --build --remove-orphans
+
+# 4. 清理悬空镜像，避免旧构建层占满磁盘
+docker image prune -f >/dev/null || true
+
+# 5. 等待 Docker 健康检查通过
+echo "==> 等待容器就绪..."
+wait_healthy() {
+  local container="$1" service="$2" status
+  for i in $(seq 1 20); do
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${container}" 2>/dev/null || echo missing)"
+    if [ "${status}" = "healthy" ]; then
+      echo "==> ${container} 健康检查通过"
+      return 0
+    fi
+    if [ "${status}" = "none" ]; then
+      echo "==> ${container} 已启动（未配置健康检查）"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "!! ${container} 健康检查未通过（状态：${status}），最近日志：" >&2
+  docker compose logs --tail=50 "${service}" >&2
+  return 1
+}
+wait_healthy "${API_CONTAINER}" takken-api
+wait_healthy "${CONTAINER}" web
+
+# 6. 输出最终状态
 docker compose ps

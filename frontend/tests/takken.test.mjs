@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 import { build } from 'esbuild'
@@ -104,11 +105,25 @@ test('empty bank and malformed questions do not throw and produce diagnostic iss
   assert.ok(issues.length >= 4)
 })
 
-test('the real question bank loads with stable ids and no fatal issues', () => {
-  assert.ok(runtime.TAKKEN_QUESTIONS.length > 0)
-  assert.ok(runtime.TAKKEN_QUESTIONS.every((question) => question.options.length === 4))
-  assert.ok(runtime.TAKKEN_QUESTIONS.every((question) => question.options.some((option) => option.id === question.correctOptionId)))
-  assert.equal(new Set(runtime.TAKKEN_QUESTIONS.map((question) => question.id)).size, runtime.TAKKEN_QUESTIONS.length)
+test('the JSON backup snapshot of the question bank normalizes cleanly with stable ids', () => {
+  // The app loads the bank from the API now; src/data/takken-questions.json is the exported backup
+  // snapshot, and this keeps it honest (unique ids, 4 options, a correct answer that exists).
+  const raw = JSON.parse(readFileSync(resolve('src/data/takken-questions.json'), 'utf8'))
+  const { questions, issues } = runtime.normalizeTakkenQuestions(raw)
+  assert.ok(questions.length > 0)
+  assert.equal(questions.length, raw.length, `some questions were skipped: ${JSON.stringify(issues)}`)
+  assert.ok(questions.every((question) => question.options.length === 4))
+  assert.ok(questions.every((question) => question.options.some((option) => option.id === question.correctOptionId)))
+  assert.equal(new Set(questions.map((question) => question.id)).size, questions.length)
+})
+
+test('setTakkenQuestionBank replaces the live TAKKEN_QUESTIONS binding the views read from', () => {
+  assert.equal(runtime.TAKKEN_QUESTIONS.length, 0)
+  runtime.setTakkenQuestionBank([legacyQuestion({ id: 'a-1' }), legacyQuestion({ id: 'a-2' }), { id: 'broken' }])
+  assert.deepEqual(runtime.TAKKEN_QUESTIONS.map((question) => question.id), ['a-1', 'a-2'])
+  assert.equal(runtime.TAKKEN_QUESTION_ISSUES.length > 0, true)
+  runtime.setTakkenQuestionBank([])
+  assert.equal(runtime.TAKKEN_QUESTIONS.length, 0)
 })
 
 test('a wrong answer puts a question into the needs-review queue', () => {

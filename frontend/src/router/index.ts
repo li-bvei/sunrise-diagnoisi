@@ -1,5 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import PublicLayout from '@/layouts/PublicLayout.vue'
+import { loadTakkenData } from '@/utils/takkenData'
+
+// The takken bank lives in MySQL behind an API. Load it before entering any takken route so the views
+// can read it synchronously; on failure still enter the route (pages show their empty state) and tell
+// the user, rather than trapping them on the previous page.
+async function ensureTakkenData() {
+  try {
+    await loadTakkenData()
+  } catch {
+    ElMessage.error('题库加载失败，请检查网络后刷新重试')
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,9 +37,9 @@ const router = createRouter({
         { path: 'tools/standard-remuneration', redirect: '/tools/salary' },
         { path: 'tools/pension', redirect: '/tools' },
         { path: 'tools/stay-days', name: 'stay-days', component: () => import('@/views/StayDaysView.vue'), meta: { title: { zh: '在日天数与出入境记录', ja: '在日日数・出入国記録' } } },
-        { path: 'tools/takken', name: 'takken', component: () => import('@/views/TakkenQuizView.vue'), meta: { title: { zh: '宅建考试刷题', ja: '宅建過去問演習' } } },
-        { path: 'tools/takken-notes', name: 'takken-notes', component: () => import('@/views/TakkenTopicsView.vue'), meta: { title: { zh: '宅建考点速查', ja: '宅建要点整理' } } },
-        { path: 'tools/takken-analysis', name: 'takken-analysis', component: () => import('@/views/TakkenAnalysisView.vue'), meta: { title: { zh: '宅建薄弱分析', ja: '宅建弱点分析' } } },
+        { path: 'tools/takken', name: 'takken', beforeEnter: ensureTakkenData, component: () => import('@/views/TakkenQuizView.vue'), meta: { title: { zh: '宅建考试刷题', ja: '宅建過去問演習' } } },
+        { path: 'tools/takken-notes', name: 'takken-notes', beforeEnter: ensureTakkenData, component: () => import('@/views/TakkenTopicsView.vue'), meta: { title: { zh: '宅建考点速查', ja: '宅建要点整理' } } },
+        { path: 'tools/takken-analysis', name: 'takken-analysis', beforeEnter: ensureTakkenData, component: () => import('@/views/TakkenAnalysisView.vue'), meta: { title: { zh: '宅建薄弱分析', ja: '宅建弱点分析' } } },
         { path: 'tools/highly-skilled-pr', redirect: '/tools/highly-skilled' },
         { path: 'tools/j-skip', redirect: '/tools/highly-skilled' },
         { path: 'guide', name: 'guide', component: () => import('@/views/GuideView.vue'), meta: { title: { zh: '使用说明', ja: 'ご利用案内' } } },

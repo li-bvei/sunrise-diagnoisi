@@ -1,4 +1,3 @@
-import rawQuestionsJson from '@/data/takken-questions.json'
 import type { TakkenAttemptMap, TakkenQuestion, TakkenQuestionOption } from '@/types/takken'
 import { classifyTakkenTag, type TakkenCategory } from '@/utils/takkenCategories'
 import { isDueToday, isMastered, needsReview } from '@/utils/takkenStorage'
@@ -111,12 +110,22 @@ export function normalizeTakkenQuestions(raw: unknown): { questions: TakkenQuest
   return { questions, issues }
 }
 
-const normalizedBank = normalizeTakkenQuestions(rawQuestionsJson)
-
-/** The single normalized question bank used by every takken view — always stable option ids. */
-export const TAKKEN_QUESTIONS: TakkenQuestion[] = normalizedBank.questions
+/**
+ * The single normalized question bank used by every takken view — always stable option ids.
+ *
+ * The bank is loaded from the takken API (see utils/takkenData.ts) by a route guard *before* any takken
+ * view is created, so views can keep reading this synchronously in their setup. `export let` gives
+ * importers a live binding: they see the loaded bank, not the empty array it starts as.
+ */
+export let TAKKEN_QUESTIONS: TakkenQuestion[] = []
 /** Any data-quality problems found while loading the bank (empty stem, bad id, etc.), for diagnostics. */
-export const TAKKEN_QUESTION_ISSUES: TakkenQuestionIssue[] = normalizedBank.issues
+export let TAKKEN_QUESTION_ISSUES: TakkenQuestionIssue[] = []
+
+export function setTakkenQuestionBank(raw: unknown): void {
+  const normalized = normalizeTakkenQuestions(raw)
+  TAKKEN_QUESTIONS = normalized.questions
+  TAKKEN_QUESTION_ISSUES = normalized.issues
+}
 
 export interface TakkenQuestionMeta {
   era: string
