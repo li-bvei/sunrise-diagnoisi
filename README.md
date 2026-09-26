@@ -118,7 +118,7 @@ docker compose logs -f --tail=100
 ```
 
 - **服务器只作部署目标**，不要在上面直接改代码；`git reset --hard` 会覆盖已跟踪文件的本地改动。
-- **当前只支持 `/server/` 子路径部署**：`frontend/vite.config.ts` 把生产构建的 `base` 写死为 `/server/`，`VITE_BASE_PATH` 目前**没有任何效果**（详见下文「宝塔 / 宿主机 Nginx 反向代理」和 `docs/PROJECT_HANDOFF.md` 第 10.2 节）。根目录 `.env` 被 `.gitignore` 忽略，`reset --hard` 不会动它。
+- **访问路径由 `VITE_BASE_PATH` 决定，不设置时默认 `/server/`**（与线上 `https://www.sunrise-nskt.com/server/` 一致），所以按现在的方式部署**服务器不需要任何额外配置**。要改成根路径，在项目根目录 `.env`（与 `docker-compose.yml` 同级）写 `VITE_BASE_PATH=/` 后重新部署。根目录 `.env` 被 `.gitignore` 忽略，`reset --hard` 不会动它。详见下文「宝塔 / 宿主机 Nginx 反向代理」。
 - **回滚**：`bash scripts/deploy.sh <旧提交号>`，或手动 `git reset --hard <旧提交>` 后重新 `docker compose up -d --build`。
 - SSL / HTTPS 与对外域名由宝塔或宿主机 Nginx 处理，容器只监听 `127.0.0.1:8090`。
 
@@ -140,7 +140,7 @@ location / {
 }
 ```
 
-> **注意（未实现）**：当前生产构建的资源路径固定为 `/server/assets/...`，所以本方式在现有代码下会白屏或资源 404。要支持根路径部署，需先让 `vite.config.ts` 读取 `VITE_BASE_PATH`（见 `docs/PROJECT_HANDOFF.md` 第 10.2 节的修复思路）。
+此时必须让前端按根路径构建：在**项目根目录**（与 `docker-compose.yml` 同级，不是 `frontend/.env`）的 `.env` 里写 `VITE_BASE_PATH=/`，再重新部署。**不写这一行会按默认的 `/server/` 构建**，挂在根路径下会白屏。
 
 ### 方式二：共用域名下的子路径（如 `/server/`）
 
@@ -158,13 +158,13 @@ location ^~ /server/ {
 
 `proxy_pass`末尾的斜杠会让宿主机 Nginx 在转发前去掉 `/server/` 前缀，容器收到的请求路径与根路径部署时完全一致。但浏览器加载的静态资源地址（JS/CSS）如果仍按根路径 `/assets/...` 构建，会因为不带 `/server/` 前缀而被宿主机路由到域名根路径的其他站点，导致白屏或资源 404。
 
-此时必须让前端构建也带上 `/server/` 前缀：在**项目根目录**（与 `docker-compose.yml` 同级，不是 `frontend/.env`）新建 `.env` 文件：
+此时前端构建必须带上 `/server/` 前缀，**这正是默认值，不需要任何配置**。想显式写出来（或换成别的子路径）时，在**项目根目录**（与 `docker-compose.yml` 同级，不是 `frontend/.env`）的 `.env` 里写：
 
 ```bash
 VITE_BASE_PATH=/server/
 ```
 
-再执行 `docker compose up -d --build` 重新构建。**实际情况**：`docker-compose.yml` 确实会把 `VITE_BASE_PATH` 作为构建参数传入 `frontend/Dockerfile`，但 `vite.config.ts` 并没有读取它，生产构建的 `base` 始终是写死的 `/server/`，所以线上目前恰好只在 `/server/` 子路径下可用；上面这个 `.env` 现阶段不会改变构建结果。容器自身的 Nginx 配置和健康检查不需要改动。
+然后执行 `bash scripts/deploy.sh`（或 `docker compose up -d --build`）重新构建。`docker-compose.yml` 把 `VITE_BASE_PATH` 作为构建参数传入 `frontend/Dockerfile`，`frontend/vite.config.ts` 通过 `frontend/vite.base-path.ts` 读取它并设置 Vite 的 `base`，前端资源路径和 Vue Router 的基准路径（`import.meta.env.BASE_URL`）都会自动带上该前缀；写成 `/server`、`/app/v2` 这类没有首尾斜杠的值会被规范化，写成完整网址或含 `..`、空格的非法值会**让构建直接失败**（而不是悄悄白屏）。**不设置该变量时默认 `/server/`**（开发模式默认 `/`）。容器自身的 Nginx 配置和健康检查不需要改动。
 
 SSL 证书与 HTTPS 在宝塔或宿主机 Nginx 处理。
 

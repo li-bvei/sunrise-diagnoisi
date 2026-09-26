@@ -1,6 +1,7 @@
 FROM node:22-alpine AS builder
 
-ARG VITE_BASE_PATH=/
+# Same default as vite.base-path.ts: the live site is served under /server/. Set VITE_BASE_PATH=/ for a root deploy.
+ARG VITE_BASE_PATH=/server/
 ENV VITE_BASE_PATH=$VITE_BASE_PATH
 
 WORKDIR /app

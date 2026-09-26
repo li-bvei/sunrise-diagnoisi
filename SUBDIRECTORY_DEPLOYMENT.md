@@ -1,6 +1,6 @@
 # `/server/` 子目录部署适配说明
 
-> 当前文档描述的是目标部署方式。请先阅读 [`docs/PROJECT_HANDOFF.md`](docs/PROJECT_HANDOFF.md) 和 [`docs/CHANGE_RECOMMENDATIONS.md`](docs/CHANGE_RECOMMENDATIONS.md)。当前 `vite.config.ts` 尚未真正读取 `VITE_BASE_PATH`，根路径/子路径构建需要先按 P0 建议修复并验证后，才能将本文件视为最终运行手册。
+> 本文描述子目录部署的实现方式，与当前代码一致（2026-09-26 起 `VITE_BASE_PATH` 真正生效）。整体交接信息见 [`docs/PROJECT_HANDOFF.md`](docs/PROJECT_HANDOFF.md)。
 
 ## 目标
 
@@ -9,49 +9,58 @@
 | 环境 | 访问地址 | 应用基路径 |
 | --- | --- | --- |
 | 本地开发 | `http://localhost:5173/` | `/` |
-| 生产部署 | `https://www.sunrise-nskt.com/server/` | `/server/` |
+| 生产部署（默认） | `https://www.sunrise-nskt.com/server/` | `/server/` |
+| 生产部署（根路径 / 其他子路径） | 自定义 | 由 `VITE_BASE_PATH` 指定 |
 
-本次子目录适配只涉及 Vite 构建基路径和 Vue Router history 基路径，没有修改业务逻辑或页面内容。
+子目录适配只涉及 Vite 构建基路径和 Vue Router history 基路径，不涉及业务逻辑或页面内容。
 
 ## 1. Vite 构建基路径
 
-修改文件：
+涉及文件：
 
-`frontend/vite.config.ts`
+- `frontend/vite.config.ts`
+- `frontend/vite.base-path.ts`（取值与校验逻辑，有单元测试 `frontend/tests/deploy-config.test.mjs`）
 
-最终代码：
+`vite.config.ts`：
 
 ```ts
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import { resolveBasePath } from './vite.base-path'
 
-export default defineConfig(({ mode }) => ({
-  base: mode === 'production' ? '/server/' : '/',
-  plugins: [vue()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  return {
+    base: resolveBasePath(env.VITE_BASE_PATH, mode === 'production'),
+    plugins: [vue()],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
     },
-  },
-}))
+  }
+})
 ```
 
-关键改动：
+取值规则（`resolveBasePath`）：
 
-```ts
-export default defineConfig(({ mode }) => ({
-  base: mode === 'production' ? '/server/' : '/',
-}))
-```
+| `VITE_BASE_PATH` | 生产构建 `base` | 开发 `base` |
+| --- | --- | --- |
+| 未设置 / 空 | `/server/`（默认，与线上一致） | `/` |
+| `/` | `/` | `/` |
+| `/server`、`/server/` | `/server/` | `/server/` |
+| `/app/v2` | `/app/v2/` | `/app/v2/` |
+| `server`、网址、含 `..`/空格/`?` | **构建失败并报错** | **报错** |
 
-作用：
+要点：
 
-- 执行 `npm run dev` 时，Vite 使用 `development` 模式，`base` 为 `/`。
-- 执行 `npm run build` 时，Vite 默认使用 `production` 模式，`base` 为 `/server/`。
-- 生产构建生成的 JavaScript、CSS 及由 Vite 管理的资源地址会自动带上 `/server/` 前缀。
+- 执行 `npm run dev` 时不设变量，`base` 为 `/`；执行 `npm run build` 时不设变量，`base` 为 `/server/`。
+- 变量既可来自 shell / Docker 构建参数，也可来自 `frontend/.env*`；Docker 部署时由根目录 `.env` → `docker-compose.yml` 的 build arg → `frontend/Dockerfile` 传入。三处默认值都是 `/server/`，改其中一处的默认值必须同步其余两处（测试会检查）。
+- 非法值直接让构建失败，因为错误的 `base` 不会报错，只会在浏览器里白屏。
+- 生产构建生成的 JavaScript、CSS 及由 Vite 管理的资源地址会自动带上该前缀。
 
-生产构建后的 `dist/index.html` 资源引用形式类似：
+默认构建后的 `dist/index.html` 资源引用形式类似：
 
 ```html
 <script type="module" crossorigin src="/server/assets/index-[hash].js"></script>
@@ -88,7 +97,8 @@ history: createWebHistory(import.meta.env.BASE_URL)
 | 环境 | `import.meta.env.BASE_URL` |
 | --- | --- |
 | 本地开发 | `/` |
-| 生产构建 | `/server/` |
+| 生产构建（默认） | `/server/` |
+| 生产构建（`VITE_BASE_PATH=/`） | `/` |
 
 因此 Vue Router 会自动得到正确的 history 根路径：
 
@@ -182,14 +192,17 @@ http://localhost:5173/server/
 
 ```bash
 cd frontend
-npm run build
+npm run build                      # 默认 /server/
+VITE_BASE_PATH=/ npm run build     # 根路径
 ```
 
-部署入口：
+部署入口（默认）：
 
 ```text
 https://www.sunrise-nskt.com/server/
 ```
+
+服务器上部署仍是 `bash scripts/deploy.sh`；要换根路径，先在项目根目录 `.env` 写 `VITE_BASE_PATH=/`，并同步调整宿主机 Nginx 的 location（见 `README.md` 方式一）。
 
 ## 6. 未修改的部分
 
@@ -208,4 +221,4 @@ https://www.sunrise-nskt.com/server/
 - 页面内容和样式
 - 后端和数据库
 
-总结：代码层面的子目录适配只有 `frontend/vite.config.ts` 和 `frontend/src/router/index.ts` 两处核心修改。
+总结：代码层面的子目录适配集中在 `frontend/vite.config.ts`（+ `vite.base-path.ts`）和 `frontend/src/router/index.ts`，Docker 侧的默认值在 `frontend/Dockerfile` 和 `docker-compose.yml`。

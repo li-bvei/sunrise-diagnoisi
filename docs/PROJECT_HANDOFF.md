@@ -1,7 +1,7 @@
 # SUNRISE 项目交接说明
 
 > 文档快照：2026-09-26（Asia/Tokyo）
-> 对应代码基线：`origin/main` 的 `ab48e5c`（本文档提交前）
+> 对应代码基线：`origin/main` 的 `323beb9` 及其后的 base 路径修复提交
 > 适用对象：接手项目的 AI、前端工程师、产品/业务负责人
 > 当前状态：可运行、已上线（Docker + 宿主机 Nginx，`/server/` 子路径）的 Vue 前台工具集合；没有后端、账号、数据库或案件管理
 
@@ -12,8 +12,8 @@
 - 前端有 **7 个工具**、**5 个业务分类**：高度人才积分（含 J-Skip）、永住条件、租房初期费用、工资/社保/到手、役员报酬、在日天数记录、宅建刷题。宅建考点速查、薄弱分析是辅助路由，不计入工具数。
 - 全部是**前端本地计算**。没有 API、没有数据库，姓名/电话等只存在当前页面状态。`localStorage` 只存语言偏好、宅建学习记录和出入境记录（见第 8 节）。
 - 界面已统一为 **Apple 风格设计系统**；工资和役员报酬的明细是**日本工资单（給与明細）表格**，役员报酬的月額/年額表各有独立的 **PDF 和 CSV 下载**。
-- `main` 上的代码已通过：`vue-tsc`、**38 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
-- **最大上线风险仍是构建路径**：`frontend/vite.config.ts` 把生产 `base` 写死为 `/server/`，`VITE_BASE_PATH` 实际没有被读取。线上目前就是子路径部署，所以能用；但 README 曾写成“可配置”，根路径部署会白屏（第 10.2 节）。
+- 代码已通过：`vue-tsc`、**42 项自动化测试**、生产构建（2026-09-26 实测）。没有端到端、真机移动端、打印/PDF 的自动化测试。
+- **构建路径已修复（2026-09-26）**：`VITE_BASE_PATH` 现在真正生效，**不设置时默认 `/server/`**（与线上一致），所以部署命令和服务器配置都不用动；要换根路径只需在服务器 `.env` 写 `VITE_BASE_PATH=/`（第 10.2 节）。
 - 服务器更新流程是：**合并到 `main` → 服务器执行 `bash scripts/deploy.sh` → 浏览器强制刷新**。只推分支不会被部署（第 10、11 节）。
 - 法律页（隐私/条款/免责）仍是占位；咨询留资流程只有方案、没有实现（第 14 节）。
 
@@ -33,6 +33,7 @@
 | **去掉高度人才、租房两份在线报告的打印 / 另存 PDF**及整套打印代码 | 2026-09-20 | 业主要求；报告只保留在线预览 |
 | 输入框/下拉框的聚焦圈用**真实 `border`**，不用 `box-shadow` 环 | 2026-09-20 | 业主反馈阴影“超出选择框”；边框不可能画出圆角之外 |
 | 页面级 Cmd/Ctrl+P 使用一份**精简打印样式**（不属于上一条被删的报告打印机制） | 2026-09-26 | 业主反馈打印时页首页尾错位（第 5.5 节） |
+| 构建路径 `VITE_BASE_PATH` **默认必须保持 `/server/`** | 2026-09-26 | 业主让我按“上线部署方便”自行判断：修复让变量生效，但默认值不变，保证服务器无需改动、下一次部署不会白屏 |
 
 ## 3. 技术架构
 
@@ -192,9 +193,9 @@ npm run build
 ```
 
 - `vue-tsc`：通过。
-- 自动化测试：**38/38 通过**（`practical-tools` 13、`regression` 11、`takken` 14）。
+- 自动化测试：**42/42 通过**（`practical-tools` 13、`regression` 11、`takken` 14、`deploy-config` 4）。
 - `npm run build`：通过，转换 2,082 个模块；主 JS 约 1,045 KB、CSS 约 419 KB，仍有“chunk 超过 500 kB”警告；`takkenQuestionModel` chunk 约 379 KB（含题库数据）、`HighlySkilledView` 约 256 KB、`TakkenTopicsView` 约 223 KB；jsPDF/html2canvas 为独立懒加载 chunk。
-- `dist/index.html` 资源路径为 `/server/assets/...`（与写死的 `base` 一致）。
+- 默认构建的 `dist/index.html` 资源路径为 `/server/assets/...`（`VITE_BASE_PATH` 未设置时的默认值）。
 - `git diff --check`、`npm ci --dry-run`（锁文件与 `package.json` 一致，服务器 `npm ci` 依赖它）通过。
 - `npm audit --omit=dev`：1 项 high，`nanoid <3.3.18`，来自 `vite → postcss`，属**构建期**依赖，不会打进浏览器代码；未处理。
 
@@ -225,13 +226,23 @@ bash scripts/deploy.sh <分支|标签|提交>
 2. 静态资源文件名带内容哈希并被 Nginx 长缓存（`immutable`，1 年），`index.html` 是 `no-store`。**部署后在浏览器强制刷新**（Mac：Cmd+Shift+R）或用无痕窗口，否则旧标签页里仍是旧 JS/CSS。
 3. AI 会话**没有服务器的 SSH 权限**，无法直接部署，只能给出命令由业主执行。若要“推送后自动上线”，需要另建 CI（如 GitHub Actions + SSH），目前**没有** `.github/`、没有任何 CI。
 
-### 10.2 `base` 路径（最高风险）
+### 10.2 `base` 路径（已修复，2026-09-26）
 
-- `frontend/vite.config.ts`：`base: mode === 'production' ? '/server/' : '/'`，**写死**。
-- `frontend/Dockerfile` 设置了 `ENV VITE_BASE_PATH`、`docker-compose.yml` 传了构建参数，但 Vite 配置**没有读取**它。
-- 结果：无论怎么设 `VITE_BASE_PATH`，生产构建资源都指向 `/server/assets/...`。线上是子路径部署，所以正常；改成根路径部署会白屏。
-- README 里“`vite.config.ts` 据此设置 Vite 的 `base`”曾是错误表述，已改正；`SUBDIRECTORY_DEPLOYMENT.md` 顶部有同样提示。
-- 修复思路（未做）：`const base = process.env.VITE_BASE_PATH || '/'`，规范化前后斜杠，让 `createWebHistory(import.meta.env.BASE_URL)` 继续生效，并对“根路径 / `/server/`”两种构建各做一次 smoke test。改之前先确认线上确实要保持 `/server/`，并同步更新构建断言与文档。
+**问题**：此前 `frontend/vite.config.ts` 把生产 `base` 写死为 `/server/`，`Dockerfile`/`docker-compose.yml` 传入的 `VITE_BASE_PATH` 完全没被读取，README 却写成“可配置”。线上是子路径部署所以碰巧可用，但根路径部署会白屏，文档也在误导人。
+
+**修复**：
+- `frontend/vite.base-path.ts` 的 `resolveBasePath(raw, isProduction)`：变量为空/未设置 → 生产 `/server/`、开发 `/`；有值 → 规范化成 `/segment/` 形式；非法值（不是绝对路径、含 `//` 开头、网址、`..`、空格、`?`）**直接抛错让构建失败**，因为错误的 base 不会报错、只会白屏。
+- `vite.config.ts` 用 `loadEnv(mode, process.cwd(), '')` 读取（`process.env`，即 Docker 构建参数/命令行变量，优先于 `.env` 文件）。
+- `Dockerfile` 的 `ARG` 默认值和 `docker-compose.yml` 的 `${VITE_BASE_PATH:-/server/}` 都改成 `/server/`，保证“不设变量”在整条链路上都是 `/server/`。若只改 Vite 而保留 compose 的旧默认 `/`，没有 `.env` 的服务器会在下一次部署时静默切成 `/assets/...` 而白屏——这是本次修复刻意规避的坑。
+- `createWebHistory(import.meta.env.BASE_URL)` 本来就跟随 Vite `base`，无需改。全仓库没有其他硬编码的 `/server/`。
+
+**验证（2026-09-26）**：
+- 不设变量：`dist/index.html` 资源为 `/server/assets/...`，主 JS 哈希 `index-TN1SGNex.js`，与修复前**逐字节一致**（即对线上产物零影响）。
+- `VITE_BASE_PATH=/` → `/assets/...`；`=/app` → `/app/assets/...`；`=` 空值 → 同默认；`=https://x.com/a` → 构建失败并给出明确报错。
+- 用 `vite preview` 真实运行两种构建：深层链接直接打开可渲染、站内导航前缀正确、懒加载分块（含点击“下载 PDF”才加载的 jsPDF/html2canvas）都从对应前缀返回 200。
+- 自动化：`tests/deploy-config.test.mjs` 断言默认值、规范化、非法值报错，以及 vite/Dockerfile/compose 三处默认一致、路由不含硬编码前缀。
+
+**使用方式**：线上不用改任何东西，`bash scripts/deploy.sh` 照旧。要切根路径：服务器项目根目录 `.env` 写 `VITE_BASE_PATH=/`，再部署，并把宿主机 Nginx 的 `location ^~ /server/` 改成 `location /`（参考 README 方式一）。
 
 ### 10.3 Nginx
 
@@ -249,10 +260,9 @@ bash scripts/deploy.sh <分支|标签|提交>
 
 ### 高优先级
 
-1. `VITE_BASE_PATH` 与写死的生产 `base` 不一致（第 10.2 节）。
-2. 法律页仍是占位；高度人才/永住在诊断前就要求姓名（必填）与电话（选填）——在正式隐私政策、保存期限、同意机制完成前，不要把任何个人信息持久化或接入后端。
-3. 财务结果是前端简化概算，缺配偶者控除、特定/老人扶养等（第 5.2 节），参数未联网复核；正式对客前应由税务专业人员确认，并考虑加规则元数据（版本、适用日、来源、复核状态）。
-4. 宅建题库/考点的法条、年份、答案和中日文内容需要业务人员复核。
+1. 法律页仍是占位；高度人才/永住在诊断前就要求姓名（必填）与电话（选填）——在正式隐私政策、保存期限、同意机制完成前，不要把任何个人信息持久化或接入后端。
+2. 财务结果是前端简化概算，缺配偶者控除、特定/老人扶养等（第 5.2 节），参数未联网复核；正式对客前应由税务专业人员确认，并考虑加规则元数据（版本、适用日、来源、复核状态）。
+3. 宅建题库/考点的法条、年份、答案和中日文内容需要业务人员复核。
 
 ### 中优先级
 
@@ -274,6 +284,7 @@ bash scripts/deploy.sh <分支|标签|提交>
 
 - 不要恢复高度人才/租房报告的打印按钮或 `report-print-compact` 那套“缩放到一页”的打印机制；页面级打印只保留 `index.css` 末尾那份精简样式。
 - 不要给役员报酬重新加公司利润、法人税、多方案对比；不要重做年金估算，除非基于完整的再评价率与个人履历。
+- 不要把 `VITE_BASE_PATH` 的默认值改成 `/`：线上是 `/server/`，`vite.base-path.ts`、`frontend/Dockerfile`、`docker-compose.yml` 三处默认必须一致（有测试守着），否则没有 `.env` 的服务器下次部署会白屏（第 10.2 节）。
 - 不要把输入框聚焦圈改回 `box-shadow`，不要删掉 `.el-popper` 的圆角规则（第 3.3 节）。
 - 不要把 J-Skip 重新加成独立工具；不要把租房工具改成客户自助计算。
 - 不要让大学中文译名覆盖官方 PDF 的 `officialName`、稳定 ID 或自动生成文件。
