@@ -669,6 +669,9 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   100% { opacity: 0; transform: translate(-50%, -12px) scale(.94); }
 }
 .takken-explain { margin: 0 0 12px; color: var(--color-text); font-size: 14px; line-height: 1.85; }
+.takken-explain p { margin: 0 0 10px; }
+.takken-explain p:last-child { margin-bottom: 0; }
+.takken-explain-ja { display: block; margin-top: 2px; color: var(--color-text-secondary); font-size: 13px; line-height: 1.75; }
 .takken-takeaway { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 9px; background: #faf6ef; color: #7a5b2a; font-size: 13px; line-height: 1.7; }
 .takken-takeaway .el-icon { flex: 0 0 auto; margin-top: 2px; }
 .takken-bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; border-top: 1px solid var(--color-border); background: rgba(255,255,255,.97); backdrop-filter: blur(10px); box-shadow: 0 -10px 26px rgba(32,58,72,.08); }

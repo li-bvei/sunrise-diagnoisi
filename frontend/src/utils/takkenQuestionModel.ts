@@ -136,6 +136,29 @@ const TITLE_PATTERN = /^(.*?)\s*問\s*(\d+)/
 
 /** Splits a title like "令和3年10月 問11" into a sortable era label and question number, for the
  * question picker's 年份/题号 filters. Falls back gracefully when a title doesn't match the pattern. */
+export interface TakkenExplainPart {
+  zh: string
+  ja: string
+}
+
+/**
+ * Splits a bilingual explanation ("①错。…日：…②对（答案）。…日：…") into per-item Chinese/Japanese pairs so
+ * the UI can show each Japanese counterpart on its own line. Items break after a sentence end that is
+ * followed by ①-④ (a bare circled digit inside a sentence, e.g. "契约①②", is not a break). A part with no
+ * "日：" marker comes back with an empty `ja`, so Chinese-only explanations still render as before.
+ */
+export function splitTakkenExplain(explain: string): TakkenExplainPart[] {
+  return explain
+    .split(/(?<=[。；！？])(?=[①②③④])/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const marker = part.indexOf('日：')
+      if (marker < 0) return { zh: part, ja: '' }
+      return { zh: part.slice(0, marker).trim(), ja: part.slice(marker + 2).trim() }
+    })
+}
+
 export function parseQuestionMeta(title: string): TakkenQuestionMeta {
   const match = title.match(TITLE_PATTERN)
   if (!match) return { era: title, number: null }

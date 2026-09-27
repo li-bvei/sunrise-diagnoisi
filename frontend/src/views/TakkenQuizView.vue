@@ -5,7 +5,7 @@ import { CircleCheck, CircleClose, List, Star, StarFilled } from '@element-plus/
 import TakkenSubnav from '@/components/takken/TakkenSubnav.vue'
 import TakkenTagFilter from '@/components/takken/TakkenTagFilter.vue'
 import TakkenQuestionPicker from '@/components/takken/TakkenQuestionPicker.vue'
-import { TAKKEN_QUESTIONS } from '@/utils/takkenQuestionModel'
+import { TAKKEN_QUESTIONS, splitTakkenExplain } from '@/utils/takkenQuestionModel'
 import type { TakkenAttemptMap, TakkenPracticeMode, TakkenQuestion } from '@/types/takken'
 import {
   applyTakkenAnswer,
@@ -172,6 +172,7 @@ const displayOptions = computed(() => {
 // letters. We keep a mapping (letter -> original option number) so it can be looked up, but it is
 // internal bookkeeping, not something to print under every option — see `optionMapping` below,
 // surfaced only inside a collapsed detail in the feedback panel.
+const explainParts = computed(() => splitTakkenExplain(currentQuestion.value?.explain ?? ''))
 const hasPerOptionExplain = computed(() => !!currentQuestion.value?.options.some((option) => option.explainZh))
 function originalPosition(optionId: string): number {
   const question = currentQuestion.value
@@ -427,7 +428,12 @@ function heroCtaAction() {
                 <span>你的答案：<strong>{{ selectedLetter }}</strong></span>
                 <span v-if="!isCorrect">正确答案：<strong>{{ correctLetter }}</strong></span>
               </div>
-              <p class="takken-explain">{{ currentQuestion.explain }}</p>
+              <div class="takken-explain">
+                <p v-for="(part, index) in explainParts" :key="index">
+                  <span>{{ part.zh }}</span>
+                  <span v-if="part.ja" class="takken-explain-ja" lang="ja">{{ part.ja }}</span>
+                </p>
+              </div>
               <div class="takken-takeaway"><el-icon><Star /></el-icon><span>{{ currentQuestion.takeaway }}</span></div>
               <details v-if="!hasPerOptionExplain" class="takken-mapping-note">
                 <summary>解析对照表（原题选项顺序）</summary>

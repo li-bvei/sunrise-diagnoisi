@@ -270,3 +270,23 @@ test('timesReported defaults to 1 and survives normalization for both legacy and
   const negative = runtime.normalizeTakkenQuestion(legacyQuestion({ timesReported: -5 }), [])
   assert.equal(negative.timesReported, 1)
 })
+
+test('splitTakkenExplain pairs each Chinese item with its Japanese counterpart', () => {
+  const parts = runtime.splitTakkenExplain('①错。甲乙。日：誤り。甲乙。②对（答案）。丙丁。日：正しい。丙丁。')
+  assert.deepEqual(parts, [
+    { zh: '①错。甲乙。', ja: '誤り。甲乙。' },
+    { zh: '②对（答案）。丙丁。', ja: '正しい。丙丁。' },
+  ])
+})
+
+test('splitTakkenExplain does not break on a circled digit inside a sentence and tolerates Chinese-only text', () => {
+  assert.equal(runtime.splitTakkenExplain('①错。契约①②均无效。').length, 1)
+  assert.deepEqual(runtime.splitTakkenExplain('只有中文的解析'), [{ zh: '只有中文的解析', ja: '' }])
+  assert.deepEqual(runtime.splitTakkenExplain(''), [])
+})
+
+test('every question in the JSON backup has a bilingual explanation (each item carries a Japanese part)', () => {
+  const questions = JSON.parse(readFileSync(resolve('src/data/takken-questions.json'), 'utf8'))
+  const missing = questions.filter((q) => runtime.splitTakkenExplain(q.explain).some((part) => !part.ja)).map((q) => q.id)
+  assert.deepEqual(missing, [])
+})
