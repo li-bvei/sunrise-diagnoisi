@@ -14,10 +14,11 @@ export const HIGHLY_SKILLED_RULES_VERSION = '2026-07'
 export const HIGHLY_SKILLED_SOURCE_URL =
   'https://www.moj.go.jp/isa/applications/resources/newimmiact_3_evaluate_index.html'
 
-export function calculateAge(birthDate: string, diagnosisDate: string): number {
+export function calculateAge(birthDate: string, diagnosisDate: string): number | null {
+  if (!birthDate || !diagnosisDate) return null
   const birth = new Date(`${birthDate}T00:00:00`)
   const reference = new Date(`${diagnosisDate}T00:00:00`)
-  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime()) || birth > reference) return -1
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime()) || birth > reference) return null
   let age = reference.getFullYear() - birth.getFullYear()
   const birthdayPassed =
     reference.getMonth() > birth.getMonth()
@@ -26,7 +27,8 @@ export function calculateAge(birthDate: string, diagnosisDate: string): number {
   return age
 }
 
-function educationPoints(activity: HighlySkilledActivity, education: EducationLevel) {
+function educationPoints(activity: HighlySkilledActivity, education: EducationLevel | null) {
+  if (!education) return 0
   if (activity === 'academic') {
     if (education === 'doctorate') return 30
     if (education === 'master' || education === 'professional_degree') return 20
@@ -60,7 +62,8 @@ function experiencePoints(activity: HighlySkilledActivity, years: number) {
   return years >= 3 ? 10 : 0
 }
 
-function incomePoints(activity: HighlySkilledActivity, age: number, income: number) {
+function incomePoints(activity: HighlySkilledActivity, age: number | null, income: number | null) {
+  if (income === null) return 0
   if (activity === 'management') {
     if (income >= 30_000_000) return 50
     if (income >= 25_000_000) return 40
@@ -71,20 +74,22 @@ function incomePoints(activity: HighlySkilledActivity, age: number, income: numb
   if (income >= 10_000_000) return 40
   if (income >= 9_000_000) return 35
   if (income >= 8_000_000) return 30
-  if (income >= 7_000_000 && age < 40) return 25
-  if (income >= 6_000_000 && age < 40) return 20
-  if (income >= 5_000_000 && age < 35) return 15
-  return income >= 4_000_000 && age < 30 ? 10 : 0
+  if (income >= 7_000_000 && age !== null && age < 40) return 25
+  if (income >= 6_000_000 && age !== null && age < 40) return 20
+  if (income >= 5_000_000 && age !== null && age < 35) return 15
+  return income >= 4_000_000 && age !== null && age < 30 ? 10 : 0
 }
 
-function agePoints(activity: HighlySkilledActivity, age: number) {
+function agePoints(activity: HighlySkilledActivity, age: number | null) {
+  if (age === null) return 0
   if (activity === 'management') return 0
   if (age < 30) return 15
   if (age < 35) return 10
   return age < 40 ? 5 : 0
 }
 
-function researchPoints(activity: HighlySkilledActivity, achievements: 0 | 1 | 2) {
+function researchPoints(activity: HighlySkilledActivity, achievements: 0 | 1 | 2 | null) {
+  if (achievements === null) return 0
   if (activity === 'academic') return achievements >= 2 ? 25 : achievements === 1 ? 20 : 0
   return activity === 'professional' && achievements >= 1 ? 15 : 0
 }
@@ -104,6 +109,20 @@ function addExcluded(items: ScoreItem[], key: string, category: ScoreItem['categ
   items.push({ key, category, points: 0, status: 'excluded', reasonKey })
 }
 
+function addUnknown(items: ScoreItem[], key: string, category: ScoreItem['category']) {
+  items.push({ key, category, points: 0, status: 'unknown' })
+}
+
+export function calculateIncomePointsForScenario(
+  activity: HighlySkilledActivity,
+  age: number | null,
+  annualIncome: number,
+) {
+  if (activity !== 'professional' || age !== null) return incomePoints(activity, age, annualIncome)
+  // With unknown age, show the full range across the age bands used by the points table.
+  return [incomePoints(activity, 29, annualIncome), incomePoints(activity, 40, annualIncome)]
+}
+
 function suggestions(input: HighlySkilledInput, total: number): ImprovementSuggestion[] {
   const result: ImprovementSuggestion[] = []
   if (total >= 70) {
@@ -112,11 +131,11 @@ function suggestions(input: HighlySkilledInput, total: number): ImprovementSugge
     if (input.japaneseLevel === 'none') result.push({ key: 'japaneseN2', potentialPoints: 10, priority: 'high' })
     if (input.japaneseLevel === 'n2') result.push({ key: 'japaneseN1Upgrade', potentialPoints: 5, priority: 'medium' })
     if (!input.university.universityId) result.push({ key: 'verifyUniversity', potentialPoints: 10, priority: 'medium' })
-    if (input.experienceYears < 3) result.push({ key: 'experience3', potentialPoints: 5, priority: 'medium' })
-    if (input.activity !== 'management' && input.annualIncome < 4_000_000 && input.age < 30) {
+    if (input.experienceYears !== null && input.experienceYears < 3) result.push({ key: 'experience3', potentialPoints: 5, priority: 'medium' })
+    if (input.activity !== 'management' && input.annualIncome !== null && input.annualIncome < 4_000_000 && input.age !== null && input.age < 30) {
       result.push({ key: 'income400', potentialPoints: 10, priority: 'medium' })
     }
-    if (!input.multipleDegrees && ['master', 'doctorate', 'professional_degree'].includes(input.education)) {
+    if (!input.multipleDegrees && input.education && ['master', 'doctorate', 'professional_degree'].includes(input.education)) {
       result.push({ key: 'multipleDegrees', potentialPoints: 5, priority: 'information' })
     }
     if (!input.japaneseUniversity && input.japaneseLevel !== 'n2') {
@@ -127,26 +146,33 @@ function suggestions(input: HighlySkilledInput, total: number): ImprovementSugge
   if (input.activity === 'professional' && input.qualificationCount === 0) {
     result.push({ key: 'qualificationReview', potentialPoints: 5, priority: 'information' })
   }
-  if (input.researchAchievements > 0) result.push({ key: 'researchEvidence', potentialPoints: 0, priority: 'high' })
+  if (input.researchAchievements !== null && input.researchAchievements > 0) result.push({ key: 'researchEvidence', potentialPoints: 0, priority: 'high' })
   if (input.japaneseLevel === 'n2') {
     result.unshift({ key: 'japaneseDegreeN2Exclusion', potentialPoints: 0, priority: 'high' })
   }
-  if (input.education === 'other') result.unshift({ key: 'educationReview', potentialPoints: 0, priority: 'high' })
+  if (input.education === 'other' || input.education === null) result.unshift({ key: 'educationReview', potentialPoints: 0, priority: 'high' })
   if (!input.baseActivityConfirmed) result.unshift({ key: 'activityReview', potentialPoints: 0, priority: 'high' })
   return result.slice(0, 8)
 }
 
 export function calculateHighlySkilled(input: HighlySkilledInput): HighlySkilledResult {
   const items: ScoreItem[] = []
-  add(items, 'education', 'education', educationPoints(input.activity, input.education))
-  add(items, 'experience', 'experience', experiencePoints(input.activity, input.experienceYears))
-  add(items, 'income', 'income', incomePoints(input.activity, input.age, input.annualIncome))
-  add(items, 'age', 'age', agePoints(input.activity, input.age))
-  add(items, 'research', 'research', researchPoints(input.activity, input.researchAchievements), 'included', officialSources.research.url)
-  add(items, 'qualification', 'qualification', input.activity === 'professional' ? Math.min(input.qualificationCount, 2) * 5 : 0, 'included', officialSources.japaneseQualification.url)
+  if (input.education === null) addUnknown(items, 'education', 'education')
+  else add(items, 'education', 'education', educationPoints(input.activity, input.education))
+  if (input.experienceYears === null) addUnknown(items, 'experience', 'experience')
+  else add(items, 'experience', 'experience', experiencePoints(input.activity, input.experienceYears))
+  if (input.annualIncome === null) addUnknown(items, 'income', 'income')
+  else if (input.activity === 'professional' && input.age === null && input.annualIncome >= 4_000_000 && input.annualIncome < 8_000_000) addUnknown(items, 'income', 'income')
+  else add(items, 'income', 'income', incomePoints(input.activity, input.age, input.annualIncome))
+  if (input.age === null) addUnknown(items, 'age', 'age')
+  else add(items, 'age', 'age', agePoints(input.activity, input.age))
+  if (input.activity !== 'management' && input.researchAchievements === null) addUnknown(items, 'research', 'research')
+  else add(items, 'research', 'research', researchPoints(input.activity, input.researchAchievements), 'included', officialSources.research.url)
+  if (input.activity === 'professional' && input.qualificationCount === null) addUnknown(items, 'qualification', 'qualification')
+  else add(items, 'qualification', 'qualification', input.activity === 'professional' ? Math.min(input.qualificationCount ?? 0, 2) * 5 : 0, 'included', officialSources.japaneseQualification.url)
   add(items, 'representative', 'position', input.activity === 'management' && input.managementPosition === 'representative' ? 10 : 0)
   add(items, 'director', 'position', input.activity === 'management' && input.managementPosition === 'director' ? 5 : 0)
-  const graduateDegree = ['master', 'doctorate', 'professional_degree'].includes(input.education)
+  const graduateDegree = input.education !== null && ['master', 'doctorate', 'professional_degree'].includes(input.education)
   add(items, 'multipleDegrees', 'bonus', input.multipleDegrees && graduateDegree ? 5 : 0, 'included', officialSources.pointEvidence.url)
   const selectedUniversity = universities.find((item) => item.id === input.university.universityId)
   if (input.japaneseUniversity && input.japaneseLevel === 'n2') {
@@ -155,8 +181,11 @@ export function calculateHighlySkilled(input: HighlySkilledInput): HighlySkilled
     add(items, 'japaneseUniversity', 'bonus', input.japaneseUniversity ? 10 : 0, 'included', officialSources.pointEvidence.url)
   }
   add(items, 'topUniversity', 'bonus', input.education !== 'other' && selectedUniversity?.sourceTypes.includes('world-ranking') ? 10 : 0, 'included', officialSources.university.url)
-  add(items, 'japaneseN1', 'bonus', input.japaneseLevel === 'n1' ? 15 : 0)
-  add(items, 'japaneseN2', 'bonus', input.japaneseLevel === 'n2' ? 10 : 0)
+  if (input.japaneseLevel === null) addUnknown(items, 'japaneseLanguage', 'bonus')
+  else {
+    add(items, 'japaneseN1', 'bonus', input.japaneseLevel === 'n1' ? 15 : 0)
+    add(items, 'japaneseN2', 'bonus', input.japaneseLevel === 'n2' ? 10 : 0)
+  }
   add(items, 'innovationOrganization', 'bonus', input.innovationOrganization ? 10 : 0, 'included', officialSources.innovation.url)
   add(items, 'innovationSme', 'bonus', input.innovationOrganization && input.innovationSme ? 10 : 0, 'included', officialSources.innovation.url)
   add(items, 'growthField', 'bonus', input.growthField ? 10 : 0, 'included', officialSources.growthField.url)
@@ -166,7 +195,7 @@ export function calculateHighlySkilled(input: HighlySkilledInput): HighlySkilled
   const totalPoints = items.filter((item) => item.status === 'included').reduce((sum, item) => sum + item.points, 0)
   const reaches70 = totalPoints >= 70
   const reaches80 = totalPoints >= 80
-  const meetsIncomeRequirement = input.activity === 'management' || input.annualIncome >= 3_000_000
+  const meetsIncomeRequirement = input.activity === 'management' ? true : input.annualIncome === null ? null : input.annualIncome >= 3_000_000
 
   return {
     totalPoints,
@@ -177,8 +206,8 @@ export function calculateHighlySkilled(input: HighlySkilledInput): HighlySkilled
     pointsTo80: Math.max(0, 80 - totalPoints),
     meetsIncomeRequirement,
     baseActivityConfirmed: input.baseActivityConfirmed,
-    preliminaryEligible: reaches70 && meetsIncomeRequirement && input.baseActivityConfirmed,
-    ageBand: input.age < 30 ? 'under30' : input.age < 35 ? '30to34' : input.age < 40 ? '35to39' : '40plus',
+    preliminaryEligible: reaches70 && meetsIncomeRequirement === true && input.baseActivityConfirmed,
+    ageBand: input.age === null ? null : input.age < 30 ? 'under30' : input.age < 35 ? '30to34' : input.age < 40 ? '35to39' : '40plus',
     suggestions: suggestions(input, totalPoints),
     rulesVersion: HIGHLY_SKILLED_RULES_VERSION,
   }
@@ -218,7 +247,7 @@ export function createDiagnosisReport(
       pointsTo70: result.pointsTo70,
       pointsTo80: result.pointsTo80,
       minimumIncomeSatisfied: result.meetsIncomeRequirement,
-      status: result.reaches80 ? 'reaches80' : result.reaches70 ? 'reaches70' : 'below70',
+      status: result.reaches80 ? 'reaches80' : result.reaches70 ? 'reaches70' : input.name.trim() === '' || !input.birthDate || result.items.some((item) => item.status === 'unknown') ? 'needs-information' : 'below70',
       university: { ...input.university },
       universityVerification: selectedUniversityForReport(input),
       inputSnapshot: JSON.parse(JSON.stringify(input)) as HighlySkilledInput,

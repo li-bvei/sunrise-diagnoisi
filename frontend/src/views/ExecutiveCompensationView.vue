@@ -16,7 +16,7 @@ import { issueDate, localDateStamp } from '@/utils/dateStamp'
 
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
-const form = reactive({ age: 45, prefecture: '東京都', includeCare: true, dependentCount: 0 })
+const form = reactive({ age: 45, prefecture: '大阪府', includeCare: true, dependentCount: 0 })
 
 // Annual compensation is the only input; monthly is derived from it.
 const annualCompensation = ref(6_000_000)

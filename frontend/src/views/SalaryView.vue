@@ -16,11 +16,12 @@ const copy = computed(() => practicalToolMessages[settings.locale])
 const MAX_ALLOWANCE_YEN = 10_000_000
 
 const form = reactive({
-  monthlySalary: 350_000 as number | null, age: 35, prefecture: '東京都', includeCare: false, dependentCount: 0,
+  monthlySalary: 350_000 as number | null, age: 35, prefecture: '大阪府', includeCare: false, dependentCount: 0,
   commutingAllowance: 0, taxableAllowance: 0, otherNonTaxableAllowance: 0,
 })
 const salaryText = ref(formatIncomeManYen(form.monthlySalary))
 const residentOverride = ref<number | null>(null)
+const includeEmployerBurden = ref(false)
 
 // Allowances are optional amounts in yen (a commuter pass is e.g. 12,340円, too fine for the 万円 salary box).
 type AllowanceKey = 'commutingAllowance' | 'taxableAllowance' | 'otherNonTaxableAllowance'
@@ -85,6 +86,26 @@ const bodyRows = computed(() => Array.from(
   { length: Math.max(paymentRows.value.length, deductionRows.value.length) },
   (_, index) => ({ payment: paymentRows.value[index], deduction: deductionRows.value[index] }),
 ))
+
+const totalAnnualCost = computed(() => {
+  const r = result.value
+  if (!r) return null
+  const health = (r.employee.health + r.employee.care + r.employee.childSupport) * 12
+  const pension = r.employee.pension * 12
+  const employment = r.employee.employment * 12
+  const incomeTax = r.incomeTaxMonthly * 12
+  const residentTax = r.residentTaxMonthly * 12
+  const employerBurden = includeEmployerBurden.value ? r.employer.total * 12 : 0
+  return {
+    health,
+    pension,
+    employment,
+    incomeTax,
+    residentTax,
+    employerBurden,
+    total: health + pension + employment + incomeTax + residentTax + employerBurden,
+  }
+})
 
 function toggleResidentAdjust() {
   residentOverride.value = residentOverride.value === null ? (result.value?.residentTaxMonthly ?? 0) : null
@@ -171,6 +192,27 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
           <MetricCard :label="copy.salary.takeHomeRatio" :value="percent(result.takeHomeRatio)" />
           <MetricCard :label="copy.salary.companyCost" :value="money(result.employerCostMonthly)" tone="primary" />
         </div>
+
+        <el-card v-if="totalAnnualCost" shadow="never" class="practical-panel">
+          <template #header>
+            <div class="panel-header-row">
+              <span>{{ copy.salary.totalCostTitle }}</span>
+              <label class="switch-label no-print">
+                <el-switch v-model="includeEmployerBurden" />
+                {{ copy.salary.includeEmployerBurden }}
+              </label>
+            </div>
+          </template>
+          <div class="practical-breakdown">
+            <div><span>{{ copy.salary.incomeTax }}</span><strong>{{ money(totalAnnualCost.incomeTax) }}</strong></div>
+            <div><span>{{ copy.salary.residentTax }}</span><strong>{{ money(totalAnnualCost.residentTax) }}</strong></div>
+            <div><span>{{ copy.salary.health }}</span><strong>{{ money(totalAnnualCost.health) }}</strong></div>
+            <div><span>{{ copy.salary.pension }}</span><strong>{{ money(totalAnnualCost.pension) }}</strong></div>
+            <div><span>{{ copy.salary.employment }}</span><strong>{{ money(totalAnnualCost.employment) }}</strong></div>
+            <div v-if="includeEmployerBurden"><span>{{ copy.salary.employerBurdenLine }}</span><strong>{{ money(totalAnnualCost.employerBurden) }}</strong></div>
+            <div class="total"><span>{{ copy.salary.totalCost }}</span><strong>{{ money(totalAnnualCost.total) }}</strong></div>
+          </div>
+        </el-card>
 
         <el-card shadow="never" class="practical-panel">
           <template #header>{{ copy.salary.breakdown }}</template>
@@ -277,4 +319,6 @@ watch(() => form.age, (age) => { form.includeCare = age >= 40 && age < 65 }, { i
 .grade-tile { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); background: #f5f5f7; }
 .grade-tile span, .grade-tile small { color: var(--color-text-secondary); font-size: 12px; }
 .grade-tile strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.panel-header-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; width: 100%; }
+.switch-label { display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 13px; font-weight: 400; cursor: pointer; }
 </style>

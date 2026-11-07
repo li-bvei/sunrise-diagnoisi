@@ -98,6 +98,7 @@ export function suggestCurrentMonthRent(monthlyRent: number, moveInDate: string)
 export interface BuildRentalCostReportInput {
   monthlyRent: number | null
   moveInDate: string | null
+  property: RentalCostReport['property']
   items: RentalCostReportLineItem[]
   materials: RentalCostReportMaterial[]
   locale: 'zh-CN' | 'ja-JP'
@@ -110,6 +111,7 @@ export function buildRentalCostReport(input: BuildRentalCostReportInput): Rental
     locale: input.locale,
     monthlyRent: input.monthlyRent,
     moveInDate: input.moveInDate,
+    property: input.property,
     items: input.items,
     total: input.items.reduce((sum, item) => sum + item.amount, 0),
     materials: input.materials,

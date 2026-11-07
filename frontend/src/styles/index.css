@@ -2,15 +2,15 @@
   --font-sf: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
   --font-cjk: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", sans-serif;
   --app-font-family: var(--font-sf), var(--font-cjk);
-  --color-primary: #0071e3;
-  --color-primary-light: #e9f2fd;
-  --color-primary-dark: #0058b9;
-  --color-page: #fbfbfd;
+  --color-primary: #3f79a4;
+  --color-primary-light: #eef8ff;
+  --color-primary-dark: #2f6389;
+  --color-page: #f8fbfd;
   --color-card: #ffffff;
-  --color-text: #1d1d1f;
-  --color-text-secondary: #6e6e73;
-  --color-border: #d2d2d7;
-  --color-border-light: #e8e8ed;
+  --color-text: #2f3a45;
+  --color-text-secondary: #718093;
+  --color-border: #dbeaf5;
+  --color-border-light: #e8f0f6;
   --color-success: #248a3d;
   --color-success-surface: #e8f7ed;
   --color-warning: #9a6200;
@@ -18,13 +18,13 @@
   --color-danger: #d70015;
   --color-danger-surface: #fdecec;
   --color-info: #6e6e73;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --radius-pill: 980px;
-  --shadow-card: 0 2px 14px rgba(0, 0, 0, 0.05), 0 0 1px rgba(0, 0, 0, 0.06);
-  --shadow-hover: 0 10px 34px rgba(0, 0, 0, 0.10);
-  --content-width: 1024px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 10px;
+  --shadow-card: 0 1px 4px rgba(47, 58, 69, 0.05);
+  --shadow-hover: 0 4px 14px rgba(47, 58, 69, 0.1);
+  --content-width: 1280px;
   --section-space: 96px;
   --el-color-primary: var(--color-primary);
   --el-color-primary-light-3: #4d9bec;
@@ -228,6 +228,53 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .text-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .text-link:hover .el-icon { transform: translateX(2px); }
 .dialog-copy { margin: 0; color: var(--color-text-secondary); line-height: 1.7; }
+
+/* Toolbox workspace follows 0629code's compact admin surfaces and pastel blue/pink accents. */
+.toolbox-header { background: rgba(255, 255, 255, .92); border-bottom-color: var(--color-border); }
+.toolbox-header .header-inner { height: 64px; }
+.toolbox-brand { display: inline-flex; align-items: center; color: var(--color-text); font-size: 16px; font-weight: 700; white-space: nowrap; }
+.toolbox-brand::before {
+  content: 'T'; display: grid; flex: 0 0 34px; width: 34px; height: 34px; margin-right: 10px; place-items: center;
+  border-radius: 8px; color: var(--color-text); background: linear-gradient(135deg, #aad4f4, #e2c5dd); font-weight: 700;
+}
+.toolbox-page {
+  min-height: calc(100vh - 54px);
+  background: linear-gradient(135deg, rgba(170, 212, 244, .16), rgba(226, 197, 221, .12)), var(--color-page);
+}
+.toolbox-shell {
+  width: min(calc(100% - 48px), 1280px); margin: 0 auto; padding: 32px 0 48px;
+}
+.toolbox-content {
+  min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: rgba(255,255,255,.94);
+  box-shadow: var(--shadow-card);
+}
+.toolbox-content { padding: 22px; }
+.toolbox-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.toolbox-heading h1 { margin: 0 0 2px; font-size: 21px; letter-spacing: 0; }
+.toolbox-heading span { color: var(--color-text-secondary); font-size: 12px; }
+.toolbox-heading-actions { display: flex; align-items: center; gap: 12px; }
+.toolbox-heading-actions .language-switch { flex: 0 0 auto; width: max-content; }
+.toolbox-heading-actions .language-switch button { flex: 0 0 auto; white-space: nowrap; }
+.toolbox-page .language-switch button.active { background: linear-gradient(90deg, rgba(170,212,244,.72), rgba(226,197,221,.45)); color: var(--color-text); }
+.toolbox-search { max-width: 300px; }
+.toolbox-search .el-input__wrapper { min-height: 38px; }
+.toolbox-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.toolbox-grid .tool-card {
+  padding: 18px; border-color: var(--color-border); border-radius: 9px; box-shadow: none; transition: border-color .16s, background .16s, box-shadow .16s;
+}
+.toolbox-grid .tool-card:hover { transform: none; border-color: #aad4f4; background: #fcfeff; box-shadow: var(--shadow-hover); }
+.toolbox-grid .tool-card-topline { margin-bottom: 10px; }
+.toolbox-grid .tool-icon { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #eef8ff, #fbf3fa); color: var(--color-primary); }
+.toolbox-grid .tool-category { font-size: 12px; }
+.toolbox-grid .tool-card h3 { min-height: 0; margin: 4px 0 7px; font-size: 16px; line-height: 1.4; }
+.toolbox-grid .tool-description { min-height: 44px; margin: 0 0 14px; font-size: 13px; line-height: 1.55; }
+.toolbox-grid .text-link { padding-top: 11px; border-top: 1px solid var(--color-border-light); font-size: 13px; }
+.toolbox-empty { padding: 56px 16px; color: var(--color-text-secondary); text-align: center; }
+.toolbox-header .language-switch button.active { background: linear-gradient(90deg, rgba(170,212,244,.72), rgba(226,197,221,.45)); color: var(--color-text); }
+.toolbox-footer { border-top: 1px solid var(--color-border); background: #fff; }
+.toolbox-footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 54px; color: var(--color-text-secondary); font-size: 12px; }
+.toolbox-footer-inner nav { display: flex; flex-wrap: wrap; gap: 18px; }
+.toolbox-footer-inner a:hover { color: var(--color-primary); }
 
 /* Apple-style controls — fully rounded, calm fills, no heavy shadows. */
 .el-button {
@@ -477,6 +524,41 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .report-card ul { margin: 0; padding-left: 20px; font-size: 12px; }
 .report-disclaimer { margin-top: 20px; padding-top: 14px; border-top: 1px solid #aab6bd; color: var(--color-text-secondary); font-size: 10px; }
 .report-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.rental-property-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rental-property-grid .el-input-number { width: 100%; }
+.rental-fee-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; }
+.rental-fee-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr); align-items: center; gap: 10px; min-width: 0; padding-bottom: 10px; border-bottom: 1px solid var(--color-border-light); }
+.rental-fee-row > label { color: var(--color-text); font-size: 13px; font-weight: 600; }
+.rental-fee-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; color: var(--color-text-secondary); font-size: 12px; }
+.rental-fee-input .field-hint { grid-column: 1 / -1; font-size: 11px; }
+.rental-fee-input .field-hint button { padding: 0; border: 0; background: transparent; color: var(--color-primary); font-weight: 700; cursor: pointer; }
+.rental-live-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 22px; padding: 17px 18px; border-radius: 10px; background: var(--color-primary-light); color: var(--color-primary-dark); }
+.rental-live-total span { font-size: 13px; font-weight: 600; }
+.rental-live-total strong { font-size: 21px; font-variant-numeric: tabular-nums; }
+.rental-materials { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--color-border-light); }
+.rental-materials summary { color: var(--color-text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
+.rental-materials .material-grid { margin-top: 15px; }
+.client-copy-panel { margin-top: 18px; padding: 18px; border: 1px solid var(--color-border); border-radius: 10px; background: white; }
+.client-copy-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.client-copy-heading strong { font-size: 15px; }
+.client-copy-panel .el-textarea__inner { font-family: var(--app-font-family); line-height: 1.7; }
+.japan-date-shell { display: grid; max-width: 900px; gap: 20px; }
+.japan-date-panel { padding: 26px; }
+.japan-date-panel .panel-heading > span { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: var(--color-primary-light); color: var(--color-primary); }
+.date-results { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.date-results > div, .date-added-result { display: grid; gap: 5px; padding: 16px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-page); }
+.date-results span, .date-added-result > span { color: var(--color-text-secondary); font-size: 12px; }
+.date-results strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.holiday-statuses { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; }
+.holiday-statuses > div { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; }
+.date-add-grid { grid-template-columns: 1fr 160px; align-items: end; }
+.date-add-grid .el-form-item:last-child { grid-column: 1 / -1; }
+.date-mode-switch { width: 100%; }
+.date-mode-switch .el-radio-button { flex: 1; }
+.date-mode-switch .el-radio-button__inner { width: 100%; }
+.date-added-result { grid-template-columns: 1fr auto; align-items: center; margin-top: 6px; }
+.date-added-result > span { grid-column: 1 / -1; }
+.date-added-result strong { font-size: 20px; }
 .result-status { display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 15px; padding: 22px; border-radius: 12px; background: #fcf8f2; }
 .result-status.success { background: #eef7f2; }
 .result-status > .el-icon { width: 40px; height: 40px; border-radius: 50%; background: white; color: var(--color-warning); font-size: 22px; }
@@ -897,6 +979,16 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 .travel-record-card { padding: 18px 20px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: white; }
 .travel-record-card p { margin: 8px 0 0; color: var(--color-text-secondary); font-size: 13px; overflow-wrap: anywhere; }
 .record-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.travel-record-editor, .travel-record-card:has(.record-editor-dates) { padding: 18px 20px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: #fff; }
+.travel-record-editor h3 { margin: 0 0 14px; font-size: 16px; }
+.record-editor-dates, .record-editor-extra { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.record-editor-dates .el-form-item, .record-editor-extra .el-form-item { margin-bottom: 10px; }
+.record-editor-dates .el-date-editor { width: 100%; }
+.record-editor-extra .el-input { width: 100%; }
+.record-editor-extra .record-note-field { grid-column: 1 / -1; }
+.record-extra-toggle { padding: 0; border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: 13px; cursor: pointer; }
+.record-extra-toggle:hover { text-decoration: underline; text-underline-offset: 2px; }
+.record-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .stay-sort { width: 210px; }
 
 @media (max-width: 1040px) {
@@ -950,6 +1042,10 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .home-hero-actions .el-button { width: 100%; margin: 0; }
   .tool-card, .detail-block, .guide-step, .legal-card { padding: 22px; }
   .calculator-panel, .calculator-result { padding: 20px; border-radius: var(--radius-md); }
+  .rental-property-grid, .rental-fee-grid, .date-add-grid, .date-results { grid-template-columns: 1fr; }
+  .date-add-grid .el-form-item:last-child { grid-column: auto; }
+  .client-copy-heading { align-items: stretch; flex-direction: column; }
+  .date-added-result { grid-template-columns: 1fr; }
   .calculator-steps .el-step__title { display: none; }
   .calculator-steps { margin-bottom: 24px; }
   .panel-heading { grid-template-columns: 40px 1fr; gap: 12px; }
@@ -1036,6 +1132,12 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
   .app-shell { display: block; min-height: 0; }
   .site-header, .site-footer, .mobile-scrim, .mobile-panel,
   .el-message, .el-overlay, .el-popper, .no-print { display: none !important; }
+  .el-overlay:has(.rental-report-dialog) { display: block !important; position: static !important; background: #fff !important; }
+  .rental-report-dialog { position: static !important; width: 100% !important; margin: 0 !important; box-shadow: none !important; }
+  .rental-report-dialog .el-dialog__header, .rental-report-dialog .el-dialog__footer, .rental-report-dialog .client-copy-panel { display: none !important; }
+  .rental-report-dialog .el-dialog__body { padding: 0 !important; }
+  .rental-report-dialog .report-page-background { padding: 0 !important; background: #fff !important; }
+  .rental-report-dialog .diagnosis-report { width: 100% !important; padding: 0 !important; box-shadow: none !important; }
   .container { width: 100%; }
   .page-hero, .calculator-hero { padding: 0 0 14px; border-bottom: 0; background: none; }
   .section, .practical-section { padding: 10px 0; background: none; }
@@ -1069,4 +1171,30 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+@media (max-width: 980px) {
+  .toolbox-shell { width: min(calc(100% - 32px), 1280px); }
+  .toolbox-content { padding: 18px; }
+  .toolbox-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .toolbox-shell { padding-top: 18px; }
+}
+
+@media (max-width: 520px) {
+  .toolbox-shell { width: min(calc(100% - 20px), 1280px); }
+  .toolbox-content { padding: 14px; }
+  .toolbox-heading { align-items: stretch; flex-direction: column; gap: 12px; }
+  .toolbox-heading-actions { align-items: stretch; flex-direction: column-reverse; }
+  .toolbox-heading-actions .language-switch { align-self: flex-end; }
+  .toolbox-search { max-width: none; }
+  .toolbox-grid { grid-template-columns: 1fr; gap: 10px; }
+  .toolbox-grid .tool-description { min-height: 0; }
+  .toolbox-footer-inner { align-items: flex-start; flex-direction: column; justify-content: center; gap: 6px; padding-block: 12px; }
+  .toolbox-footer-inner nav { gap: 12px; }
+  .record-editor-dates, .record-editor-extra { grid-template-columns: 1fr; gap: 0; }
+  .record-editor-extra .record-note-field { grid-column: auto; }
+  .travel-record-editor, .travel-record-card:has(.record-editor-dates), .travel-record-card { padding: 15px; }
 }

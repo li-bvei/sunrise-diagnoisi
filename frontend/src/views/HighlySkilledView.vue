@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft, ArrowRight, Check, Clock, DocumentChecked, InfoFilled,
-  Refresh, WarningFilled,
+  ArrowLeft, ArrowRight, Check, Clock, DocumentChecked,
+  Edit, WarningFilled,
 } from '@element-plus/icons-vue'
 import { useSettingsStore } from '@/stores/settings'
 import UniversitySelector from '@/components/highly-skilled/UniversitySelector.vue'
@@ -12,7 +12,9 @@ import DiagnosisReportView from '@/components/highly-skilled/DiagnosisReportView
 import ScoreBreakdownChart from '@/components/highly-skilled/ScoreBreakdownChart.vue'
 import ScoreProgressChart from '@/components/highly-skilled/ScoreProgressChart.vue'
 import { officialSources } from '@/data/officialSources'
-import { buildCategoryChart, calculateAge, calculateHighlySkilled, createDiagnosisReport } from '@/utils/highlySkilledCalculator'
+import { PREFECTURE_HEALTH_RATES } from '@/data/financialParameters'
+import { buildCategoryChart, calculateAge, calculateHighlySkilled, calculateIncomePointsForScenario, createDiagnosisReport } from '@/utils/highlySkilledCalculator'
+import { calculateExecutiveCompensation, calculatePayroll, formatYen } from '@/utils/financialCalculator'
 import { trackEvent } from '@/utils/analytics'
 import { calculateJSkip } from '@/utils/jSkipCalculator'
 import {
@@ -26,7 +28,7 @@ import type {
 import type { JSkipResult } from '@/types/jSkip'
 
 type FormModel = Omit<HighlySkilledInput, 'age' | 'annualIncome' | 'experienceYears'> & {
-  age: number
+  age: number | null
   annualIncome: number | null
   experienceYears: number | null
 }
@@ -57,13 +59,13 @@ const initialForm = (): FormModel => ({
   birthDate: '',
   diagnosisDate: today,
   activity: 'professional',
-  age: -1,
+  age: null,
   annualIncome: null,
-  education: 'other',
+  education: null,
   experienceYears: null,
-  researchAchievements: 0,
-  japaneseLevel: 'none',
-  qualificationCount: 0,
+  researchAchievements: null,
+  japaneseLevel: null,
+  qualificationCount: null,
   managementPosition: 'none',
   university: { countryCode: 'JP', universityId: null, searchText: '' },
   multipleDegrees: false,
@@ -76,6 +78,7 @@ const initialForm = (): FormModel => ({
   baseActivityConfirmed: false,
 })
 const form = reactive<FormModel>(initialForm())
+const salaryAssumptions = reactive({ prefecture: '東京都', dependentCount: 0 })
 
 const zh = computed(() => settings.locale === 'zh-CN')
 const copy = computed(() => zh.value ? {
@@ -86,21 +89,20 @@ const copy = computed(() => zh.value ? {
   source: '规则版本：2026年7月', official: '查看入管厅积分制度',
   steps: ['活动类型', '个人与基本条件', '加分项目', '计算结果'],
   next: '下一步', previous: '上一步', calculate: '计算积分', points: '分',
-  name: '姓名', phone: '电话号码', phoneOptional: '（选填）', birth: '出生日期', diagnosis: '诊断基准日',
+  name: '姓名', phone: '电话号码', birth: '出生日期', diagnosis: '诊断基准日',
   income: '预计年收入', incomeHelp: '填写在日本从事拟申请活动可获得的税前预计年收入。', experience: '相关工作年限',
   education: '主要学历', research: '研究成果', qualification: '与职务相关的日本国家资格',
   result: '积分计算结果', pass: '达到 70 分积分门槛', pass80: '达到 80 分积分门槛', fail: '尚未达到 70 分积分门槛',
-  preliminaryPass: '初步判断：符合', preliminaryReview: '初步判断：基础条件未满足',
-  breakdown: '积分明细', suggestions: '改善与准备建议', report: '生成诊断报告',
-  reset: '重新计算', total: '总积分', missing: '距离门槛还差',
+  preliminaryPass: '初步判断：符合', preliminaryReview: '初步判断：尚需确认',
+  breakdown: '积分明细', report: '生成诊断报告',
+  edit: '修改其他条件', total: '总积分', missing: '距离门槛还差',
   baseConfirm: '我已确认拟从事活动符合对应就劳在留资格的活动范围和基础条件',
-  validation: '请完整填写姓名、有效出生日期、诊断基准日、年收入和相关工作年限。',
+  validation: '请选择有效的诊断基准日。',
   incomeFail: '1号イ、ロ原则上还需满足年收 300 万日元以上的最低年收基准。',
   baseFail: '尚未确认基础活动符合性，不能仅凭积分判断符合。',
   jskipTitle: '您可能同时符合特别高度人才 J-Skip',
   jskipNote: '按您已填写的活动类型、学历或职历、年收入判断，您已同时满足J-Skip的基础条件。J-Skip不使用70分积分门槛，与上方积分完全独立、不计入总分，可作为另一条可能更快的申请路径了解。',
   jskipOfficialLink: '查看入管厅J-Skip说明',
-  jskipDisclaimer: '该结果不包含积分，不代表许可决定。学历、职历、年收及活动内容均需以申请材料证明，并由入管厅最终审查。',
 } : {
   eyebrow: '高度人材ポイント制',
   title: '高度人材ポイント計算',
@@ -109,21 +111,20 @@ const copy = computed(() => zh.value ? {
   source: 'ルール版：2026年7月', official: '入管庁のポイント制度を見る',
   steps: ['活動類型', '本人・基本条件', '加点項目', '計算結果'],
   next: '次へ', previous: '戻る', calculate: 'ポイントを計算', points: '点',
-  name: '氏名', phone: '電話番号', phoneOptional: '（任意）', birth: '生年月日', diagnosis: '診断基準日',
+  name: '氏名', phone: '電話番号', birth: '生年月日', diagnosis: '診断基準日',
   income: '予定年収', incomeHelp: '申請する活動により日本で受ける税引前の予定年収を入力してください。', experience: '関連実務経験',
   education: '主な学歴', research: '研究実績', qualification: '職務に関連する日本の国家資格',
   result: 'ポイント計算結果', pass: '70点の基準に到達', pass80: '80点の基準に到達', fail: '70点の基準に未到達',
-  preliminaryPass: '初期判断：該当可能性あり', preliminaryReview: '初期判断：基礎条件を満たしていません',
-  breakdown: 'ポイント内訳', suggestions: '改善・準備の提案', report: '診断レポートを生成',
-  reset: 'もう一度計算', total: '合計ポイント', missing: '基準まであと',
+  preliminaryPass: '初期判断：該当可能性あり', preliminaryReview: '初期判断：要確認',
+  breakdown: 'ポイント内訳', report: '診断レポートを生成',
+  edit: 'その他の条件を修正', total: '合計ポイント', missing: '基準まであと',
   baseConfirm: '予定する活動が対応する就労資格の活動範囲と基礎要件を満たすことを確認しました',
-  validation: '氏名、有効な生年月日、診断基準日、年収、実務経験を入力してください。',
+  validation: '有効な診断基準日を選択してください。',
   incomeFail: '1号イ・ロでは原則として年収300万円以上の最低年収基準も必要です。',
   baseFail: '活動該当性が未確認のため、ポイントだけでは判断できません。',
   jskipTitle: '特別高度人材 J-Skip にも該当する可能性があります',
   jskipNote: '入力済みの活動類型、学歴または職歴、年収から判断すると、J-Skipの基礎要件も同時に満たしています。J-Skipは70点の基準を使わず、上記のポイントとは完全に独立しており合計点には含まれません。より早く進められる可能性がある別ルートとしてご確認ください。',
   jskipOfficialLink: '入管庁のJ-Skip説明を見る',
-  jskipDisclaimer: 'ポイント計算ではなく、許可判断でもありません。学歴、職歴、年収、活動内容は資料で立証し、入管庁の審査を受ける必要があります。',
 })
 
 const activities = computed(() => zh.value ? [
@@ -156,6 +157,7 @@ const educationOptions = computed(() => {
 })
 
 const japaneseOptions: Array<{ value: JapaneseLevel; zh: string; ja: string }> = [
+  { value: null, zh: '尚未确认', ja: '未確認' },
   { value: 'none', zh: '无对应加分', ja: '加点対象なし' },
   { value: 'n2', zh: 'JLPT N2 / BJT 400分以上等（10分）', ja: 'JLPT N2・BJT 400点以上等（10点）' },
   { value: 'n1', zh: 'JLPT N1 / BJT 480分以上等（15分）', ja: 'JLPT N1・BJT 480点以上等（15点）' },
@@ -250,12 +252,99 @@ const bonusOptions = computed<BonusOption[]>(() => [
 ])
 
 const age = computed(() => calculateAge(form.birthDate, form.diagnosisDate))
-const educationAllowsBonus = computed(() => form.education !== 'other')
+const educationAllowsBonus = computed(() => form.education !== null && form.education !== 'other')
 const resultCategoryChart = computed(() => result.value ? buildCategoryChart(result.value.items) : [])
+const incomeScore = computed(() => result.value?.items.find((item) => item.key === 'income')?.points ?? 0)
+const confirmedBasePoints = computed(() => result.value?.items
+  .filter((item) => item.key !== 'income' && item.status === 'included')
+  .reduce((sum, item) => sum + item.points, 0) ?? 0)
+const incomeScenarios = computed(() => {
+  if (!result.value) return []
+  const salaries = [3_000_000, 4_000_000, 5_000_000, 6_000_000, 7_000_000, 8_000_000, 9_000_000, 10_000_000]
+  return salaries.map((income) => {
+    const points = calculateIncomePointsForScenario(form.activity, age.value, income)
+    const low = Array.isArray(points) ? Math.min(...points) : points
+    const high = Array.isArray(points) ? Math.max(...points) : points
+    return { income, low, high, totalLow: confirmedBasePoints.value + low, totalHigh: confirmedBasePoints.value + high }
+  })
+})
+const unknownFields = computed(() => {
+  const fields = [] as string[]
+  if (!form.name.trim()) fields.push(zh.value ? '姓名' : '氏名')
+  if (!form.birthDate) fields.push(zh.value ? '出生日期（年龄分）' : '生年月日（年齢点）')
+  if (form.annualIncome === null) fields.push(zh.value ? '预计年收（年收分、300万日元最低基准）' : '予定年収（年収点・300万円の最低基準）')
+  if (form.experienceYears === null) fields.push(zh.value ? '相关工作年限' : '関連実務経験')
+  if (form.education === null) fields.push(zh.value ? '学历' : '学歴')
+  if (form.japaneseLevel === null) fields.push(zh.value ? '日语能力加分' : '日本語能力の加点')
+  if (form.activity !== 'management' && form.researchAchievements === null) fields.push(zh.value ? '研究成果加分' : '研究実績の加点')
+  if (form.activity === 'professional' && form.qualificationCount === null) fields.push(zh.value ? '日本国家资格加分' : '日本の国家資格の加点')
+  if (!form.university.universityId) fields.push(zh.value ? '毕业院校是否属于加分名单' : '出身大学が加点対象か')
+  if (![form.multipleDegrees, form.japaneseUniversity, form.innovationOrganization, form.growthField, form.localGovernmentSupport, form.foreignQualification].some(Boolean)) {
+    fields.push(zh.value ? '学历、受入机构、事业或资格等加分项目' : '学位・受入機関・事業・資格などの加点項目')
+  }
+  return fields
+})
+const potentialPointChecks = computed(() => {
+  const checks: Array<{ label: string; points: string }> = []
+  const range = (max: number) => `0～${max}${zh.value ? '分' : '点'}`
+  if (form.education === null) checks.push({ label: zh.value ? '学历及学位' : '学歴・学位', points: range(form.activity === 'management' ? 20 : 30) })
+  if (form.experienceYears === null) checks.push({ label: zh.value ? '相关工作年限' : '関連実務経験', points: range(form.activity === 'academic' ? 15 : form.activity === 'professional' ? 20 : 25) })
+  if (form.annualIncome === null) checks.push({ label: zh.value ? '予定年收' : '予定年収', points: range(form.activity === 'management' ? 50 : 40) })
+  if (form.activity !== 'management' && age.value === null) checks.push({ label: zh.value ? '年龄' : '年齢', points: range(15) })
+  if (form.japaneseLevel === null) checks.push({ label: zh.value ? '日语能力' : '日本語能力', points: range(15) })
+  if (form.activity !== 'management' && form.researchAchievements === null) checks.push({ label: zh.value ? '研究成果' : '研究実績', points: range(form.activity === 'academic' ? 25 : 15) })
+  if (form.activity === 'professional' && form.qualificationCount === null) checks.push({ label: zh.value ? '日本国家资格' : '日本の国家資格', points: range(10) })
+  if (!form.university.universityId) checks.push({ label: zh.value ? '指定大学名单核对' : '指定大学リストの照合', points: range(10) })
+  if (![form.multipleDegrees, form.japaneseUniversity, form.innovationOrganization, form.growthField, form.localGovernmentSupport, form.foreignQualification].some(Boolean)) {
+    checks.push({ label: zh.value ? '其他学历、机构、事业或资格加分' : 'その他の学位・機関・事業・資格加点', points: zh.value ? '单项 +5～10分' : '項目により +5～10点' })
+  }
+  return checks
+})
+const taxProjection = computed(() => {
+  const annualIncome = form.annualIncome
+  if (annualIncome === null || annualIncome <= 0 || age.value === null) return null
+  const includeCare = age.value >= 40 && age.value < 65
+  if (form.activity === 'management') {
+    const projection = calculateExecutiveCompensation(
+      annualIncome,
+      salaryAssumptions.prefecture,
+      includeCare,
+      null,
+      salaryAssumptions.dependentCount,
+    )
+    return {
+      incomeTaxAnnual: projection.incomeTaxAnnual,
+      residentTaxAnnual: projection.residentTaxAnnual,
+      taxAnnual: projection.incomeTaxAnnual + projection.residentTaxAnnual,
+      insuranceAnnual: projection.employeeInsuranceAnnual,
+      takeHomeAnnual: projection.takeHomeAnnual,
+      employerInsuranceAnnual: projection.employerInsuranceAnnual,
+      employmentCovered: false,
+    }
+  }
+  const projection = calculatePayroll({
+    monthlySalary: Math.round(annualIncome / 12),
+    age: age.value,
+    prefecture: salaryAssumptions.prefecture,
+    includeCare,
+    residentTaxMonthlyOverride: null,
+    dependentCount: salaryAssumptions.dependentCount,
+  })
+  return {
+    incomeTaxAnnual: projection.incomeTaxMonthly * 12,
+    residentTaxAnnual: projection.residentTaxMonthly * 12,
+    taxAnnual: (projection.incomeTaxMonthly + projection.residentTaxMonthly) * 12,
+    insuranceAnnual: projection.employee.total * 12,
+    takeHomeAnnual: projection.takeHomeMonthly * 12,
+    employerInsuranceAnnual: projection.employer.total * 12,
+    employmentCovered: true,
+  }
+})
+const money = (value: number) => formatYen(value, settings.locale)
 watch(age, (value) => { form.age = value })
 watch(() => form.activity, (value) => {
-  if (value === 'management') { form.researchAchievements = 0; form.qualificationCount = 0 }
-  if (value === 'academic') { form.qualificationCount = 0; form.managementPosition = 'none' }
+  if (value === 'management') { form.researchAchievements = null; form.qualificationCount = null }
+  if (value === 'academic') { form.qualificationCount = null; form.managementPosition = 'none' }
   if (value === 'professional') form.managementPosition = 'none'
 })
 watch(() => form.innovationOrganization, (value) => { if (!value) form.innovationSme = false })
@@ -271,11 +360,12 @@ watch(() => settings.locale, (locale) => {
   if (!report.value || !result.value) return
   report.value = createDiagnosisReport({
     ...form,
-    annualIncome: form.annualIncome as number,
-    experienceYears: form.experienceYears as number,
     university: { ...form.university },
   }, result.value, locale)
 })
+watch(form, () => {
+  if (result.value && validBase()) refreshCalculation()
+}, { deep: true })
 
 function disabledDate(date: Date, birth = false) {
   const end = new Date()
@@ -283,11 +373,10 @@ function disabledDate(date: Date, birth = false) {
   return date > end
 }
 function validBase() {
-  return form.name.trim().length > 0 && form.name.trim().length <= 80
+  return form.name.trim().length <= 80
     && (form.phone.trim().length === 0 || (form.phone.trim().length >= 7 && form.phone.trim().length <= 30))
-    && age.value >= 0 && age.value <= 100
-    && !!form.diagnosisDate && form.annualIncome !== null && form.annualIncome >= 0
-    && form.experienceYears !== null && form.experienceYears >= 0
+    && (age.value === null || age.value <= 100)
+    && !!form.diagnosisDate
 }
 function updateIncome(value: string) {
   form.annualIncome = parseIncomeManYenInput(value)
@@ -299,6 +388,24 @@ function updateExperience(value: string) {
 }
 function formatIncome() { incomeText.value = formatIncomeManYen(form.annualIncome) }
 function formatExperience() { experienceText.value = formatInteger(form.experienceYears) }
+function currentInput(): HighlySkilledInput {
+  return {
+    ...form,
+    university: { ...form.university },
+  }
+}
+function refreshCalculation() {
+  const input = currentInput()
+  result.value = calculateHighlySkilled(input)
+  jSkipResult.value = input.annualIncome !== null && input.experienceYears !== null && input.education !== null ? calculateJSkip({
+    activity: input.activity,
+    education: input.education,
+    experienceYears: input.experienceYears,
+    annualIncome: input.annualIncome / 10_000,
+    baseActivityConfirmed: input.baseActivityConfirmed,
+  }) : null
+  report.value = null
+}
 function nextStep() {
   if (activeStep.value === 1 && !validBase()) return ElMessage.warning(copy.value.validation)
   activeStep.value = Math.min(2, activeStep.value + 1)
@@ -309,20 +416,7 @@ async function calculate() {
   if (!validBase()) { activeStep.value = 1; return ElMessage.warning(copy.value.validation) }
   form.name = form.name.trim()
   form.phone = form.phone.trim()
-  result.value = calculateHighlySkilled({
-    ...form,
-    annualIncome: form.annualIncome as number,
-    experienceYears: form.experienceYears as number,
-    university: { ...form.university },
-  })
-  jSkipResult.value = calculateJSkip({
-    activity: form.activity,
-    education: form.education,
-    experienceYears: form.experienceYears as number,
-    annualIncome: (form.annualIncome as number) / 10_000,
-    baseActivityConfirmed: form.baseActivityConfirmed,
-  })
-  report.value = null
+  refreshCalculation()
   activeStep.value = 3
   trackEvent({ type: 'tool_complete', toolId: 'highly-skilled' })
   await nextTick()
@@ -330,22 +424,48 @@ async function calculate() {
 }
 function createReport() {
   if (!result.value) return
-  report.value = createDiagnosisReport({
-    ...form,
-    annualIncome: form.annualIncome as number,
-    experienceYears: form.experienceYears as number,
-    university: { ...form.university },
-  }, result.value, settings.locale)
+  report.value = createDiagnosisReport(currentInput(), result.value, settings.locale)
   reportVisible.value = true
 }
-function reset() {
-  Object.assign(form, initialForm())
-  incomeText.value = ''
-  experienceText.value = ''
-  result.value = null
-  jSkipResult.value = null
-  report.value = null
-  activeStep.value = 0
+function printReport() {
+  const reportElement = document.querySelector('.report-dialog .diagnosis-report')
+  if (!(reportElement instanceof HTMLElement)) return
+
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    ElMessage.error(zh.value ? '浏览器阻止了打印窗口，请允许此页面打开弹窗后重试。' : '印刷ウィンドウがブロックされました。このページのポップアップを許可して再試行してください。')
+    return
+  }
+
+  const title = `${zh.value ? '高度人才积分诊断报告' : '高度人材ポイント診断レポート'}-${report.value?.reportId ?? ''}`
+  const styles = Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((element) => element instanceof HTMLLinkElement
+      ? `<link rel="stylesheet" href="${element.href}">`
+      : element.outerHTML)
+    .join('\n')
+  const printStyles = `
+    @page { size: A4 portrait; margin: 12mm; }
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .diagnosis-report { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; color: #17252d !important; }
+    .report-brand, .report-profile, .report-status-grid, .report-card, .university-assessment { break-inside: avoid; page-break-inside: avoid; }
+    .report-card { border-radius: 0 !important; }
+    .report-breakdown > div { break-inside: avoid; page-break-inside: avoid; }
+    .score-progress-chart, .breakdown-chart { break-inside: avoid; }
+    * { visibility: visible !important; }
+  `
+
+  printWindow.document.open()
+  printWindow.document.write(`<!doctype html><html lang="${zh.value ? 'zh-CN' : 'ja-JP'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title>${styles}<style>${printStyles}</style></head><body>${reportElement.outerHTML}</body></html>`)
+  printWindow.addEventListener('load', () => {
+    printWindow.focus()
+    printWindow.print()
+  }, { once: true })
+  printWindow.document.close()
+}
+function editConditions() {
+  activeStep.value = 1
+  nextTick(() => document.querySelector('.calculator-shell')?.scrollIntoView({ behavior: 'smooth' }))
 }
 function itemLabel(key: string) {
   const labels: Record<string, [string, string]> = {
@@ -354,33 +474,15 @@ function itemLabel(key: string) {
     representative: ['代表职位', '代表者の地位'], director: ['董事・执行职位', '取締役・執行役'],
     multipleDegrees: ['不同领域多个学位', '複数分野の学位'], japaneseUniversity: ['日本高等教育机构学位', '日本の高等教育機関の学位'],
     topUniversity: ['指定世界大学排名院校', '指定世界大学ランキング校'], japaneseN1: ['日语能力 N1 等', '日本語能力 N1等'],
-    japaneseN2: ['日语能力 N2 等', '日本語能力 N2等'], innovationOrganization: ['创新促进支援机构', 'イノベーション促進支援機関'],
+    japaneseN2: ['日语能力 N2 等', '日本語能力 N2等'], japaneseLanguage: ['日语能力加分', '日本語能力の加点'], innovationOrganization: ['创新促进支援机构', 'イノベーション促進支援機関'],
     innovationSme: ['对象中小企业追加', '対象中小企業の追加'], growthField: ['指定成长领域尖端事业', '指定成長分野の先端事業'],
     localGovernmentSupport: ['地方公共团体支援措施', '地方公共団体の支援措置'], foreignQualification: ['指定外国资格・表彰', '指定外国資格・表彰'],
   }
   return labels[key]?.[zh.value ? 0 : 1] ?? key
 }
-function suggestionText(key: string) {
-  const labels: Record<string, [string, string]> = {
-    prepareEvidence: ['恭喜，积分已经达标！接下来请把学历、工作经历、年收入和其他加分项目的证明文件都准备齐全，因为最终能不能通过还是要看材料能否证明这些内容。', 'おめでとうございます、基準点に到達しました！次は学歴・職歴・年収やその他の加点項目の証明書類を揃えましょう。最終的には資料で証明できるかどうかがポイントになります。'],
-    japaneseN2: ['如果您有JLPT N2或同等日语能力证明（比如BJT商务日语考试400分以上），补充这一项可以多加10分，记得以合格证书为准。', 'JLPT N2やBJT400点以上など同等の日本語能力証明をお持ちなら、この項目を追加することで10点増える可能性があります。合格証明書が必要です。'],
-    japaneseN1Upgrade: ['现在是按N2档位计分的。如果您实际已经达到N1水平（或BJT 480分以上），可以再确认一下能不能升到更高档位加分。', '現在はN2区分で計算しています。もしN1、またはBJT480点以上をお持ちでしたら、より高い区分で加点できないか確認してみてください。'],
-    gapTo80: [`按目前情况，您距离80分还差 ${result.value?.pointsTo80 ?? 0} 分。达到80分能获得更多签证方面的优待，可以看看还有哪些项目能补充。`, `現在の状況では、80点まであと${result.value?.pointsTo80 ?? 0}点です。80点に到達するとさらに優遇が受けられるので、追加できる項目がないか見てみましょう。`],
-    qualificationReview: ['可以看看您从事的工作是否需要用到日本的国家资格证书，如果有相关的记得补充上，最多能加两项（每项5分）。', 'ご担当予定の業務に日本の国家資格が必要かどうか確認してみてください。関連する資格があれば追加でき、最大2件（1件5点）まで加点されます。'],
-    researchEvidence: ['您填写的研究成果已经算进总分了，正式申请时记得准备好专利证书、科研经费的批准文件或论文检索记录等证明材料。', '入力いただいた研究実績はすでに合計点に反映されています。申請時には特許証明、研究費採択通知、論文検索結果などの資料を準備しておきましょう。'],
-    japaneseDegreeN2Exclusion: ['日语N2和“在日本获得学位”这两项不能同时加分，系统已经按对您更有利的N2来计算了。', 'JLPT N2と「日本での学位取得」は同時に加点できないため、より有利なN2の方で計算しています。'],
-    japaneseDegreeSelection: ['如果您确实是在日本的大学或研究生院毕业并拿到学位的，记得勾选这一项，可以额外加10分。', '実際に日本の大学や大学院で学位を取得された場合は、この項目にチェックを入れると10点追加されます。'],
-    verifyUniversity: ['系统里没有搜索到您的学校，请用毕业证书上的官方英文校名再搜一次；如果最终还是没有匹配上，这次就没办法加院校分了。', '該当する学校が見つかりませんでした。卒業証明書に記載された正式な英語表記でもう一度検索してください。それでも一致しない場合、今回は大学の加点対象になりません。'],
-    experience3: ['相关工作经验只要能证明达到3年，就能开始拿到职历加分，可以留意一下年限是否已经足够。', '関連する実務経験が3年に達すると、職歴の加点が始まります。年数が足りているか確認してみてください。'],
-    income400: ['如果您不到30岁，并且年收入能达到400万日元以上，这一项就能多加10分。', '30歳未満で年収400万円以上であれば、この項目でさらに10点加算されます。'],
-    multipleDegrees: ['如果您有两个不同专业领域的硕士、博士或专业职学位，可以确认一下是否符合额外加5分的条件。', '分野の異なる修士・博士・専門職学位を2つ以上お持ちの場合、追加で5点加点できるか確認してみてください。'],
-    educationReview: ['您目前学历选的是“其他或不确定”，这样是不计学历分的。请拿出毕业证和学位证书核对一下，再重新选择对应的学历。', '現在、学歴は「その他・不明」になっており、学歴の点数は加算されていません。卒業証明書・学位記をご確認のうえ、該当する学歴を選び直してください。'],
-    activityReview: ['在看积分之前，请先确认您准备从事的工作内容确实符合所选的活动类型，光靠分数达标是不够的。', '点数を確認する前に、まずご予定の業務内容が選んだ活動類型に本当に当てはまるか確認してください。点数が足りていても、それだけでは不十分です。'],
-  }
-  return labels[key]?.[zh.value ? 0 : 1] ?? key
-}
 function ageBandLabel(band: HighlySkilledResult['ageBand']) {
-  const labels: Record<HighlySkilledResult['ageBand'], [string, string]> = {
+  if (!band) return zh.value ? '未输入' : '未入力'
+  const labels: Record<NonNullable<HighlySkilledResult['ageBand']>, [string, string]> = {
     under30: ['30岁以下区间', '30歳未満区分'],
     '30to34': ['30～34岁区间', '30～34歳区分'],
     '35to39': ['35～39岁区间', '35～39歳区分'],
@@ -431,18 +533,19 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
         <div class="panel-heading"><span>02</span><div><h2>{{ zh ? '填写本人及计算条件' : '本人情報と計算条件を入力' }}</h2><p>{{ copy.privacy }}</p></div></div>
         <el-form label-position="top" class="calculator-form">
           <div class="form-grid">
-            <el-form-item :label="copy.name" required><el-input v-model="form.name" maxlength="80" show-word-limit /></el-form-item>
-            <el-form-item><template #label>{{ copy.phone }}<span class="field-optional-tag">{{ copy.phoneOptional }}</span></template><el-input v-model="form.phone" maxlength="30" inputmode="tel" placeholder="+81 90-1234-5678" /></el-form-item>
-            <el-form-item :label="copy.birth" required><el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" :disabled-date="(d: Date) => disabledDate(d, true)" /></el-form-item>
+            <el-form-item :label="copy.name"><el-input v-model="form.name" maxlength="80" show-word-limit /></el-form-item>
+            <el-form-item :label="copy.phone"><el-input v-model="form.phone" maxlength="30" inputmode="tel" placeholder="+81 90-1234-5678" /></el-form-item>
+            <el-form-item :label="copy.birth"><el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" :disabled-date="(d: Date) => disabledDate(d, true)" /></el-form-item>
             <el-form-item :label="copy.diagnosis" required><el-date-picker v-model="form.diagnosisDate" type="date" value-format="YYYY-MM-DD" format="YYYY/MM/DD" :disabled-date="(d: Date) => disabledDate(d)" /></el-form-item>
           </div>
-          <div v-if="age >= 0" class="calculated-age">{{ zh ? `基准日周岁：${age}岁` : `基準日の満年齢：${age}歳` }}</div>
+          <div v-if="age !== null" class="calculated-age">{{ zh ? `基准日周岁：${age}岁` : `基準日の満年齢：${age}歳` }}</div>
           <div class="form-grid">
-            <el-form-item :label="copy.income" required><el-input :model-value="incomeText" inputmode="decimal" autocomplete="off" placeholder="400" @input="updateIncome" @blur="formatIncome" /><span class="field-unit simple">{{ zh ? '万日元' : '万円' }}</span><p class="field-help">{{ copy.incomeHelp }} {{ zh ? '以万日元输入，例如 400 表示 4,000,000 日元；可输入 0.1。' : '万円単位で入力します。400 は 4,000,000円を表し、0.1まで入力できます。' }}</p></el-form-item>
-            <el-form-item :label="copy.experience" required><el-input :model-value="experienceText" inputmode="numeric" autocomplete="off" @input="updateExperience" @blur="formatExperience" /><span class="field-unit simple">{{ zh ? '完整年' : '満年' }}</span><p class="field-help">{{ zh ? '仅填写与申请活动直接相关、能够用在职或离职证明说明的完整年数。' : '申請活動に直接関連し、在職・退職証明で立証できる満年数を入力してください。' }}</p></el-form-item>
+            <el-form-item :label="copy.income"><el-input :model-value="incomeText" inputmode="decimal" autocomplete="off" placeholder="400" @input="updateIncome" @blur="formatIncome" /><span class="field-unit simple">{{ zh ? '万日元' : '万円' }}</span><p class="field-help">{{ copy.incomeHelp }} {{ zh ? '以万日元输入，例如 400 表示 4,000,000 日元；可输入 0.1。' : '万円単位で入力します。400 は 4,000,000円を表し、0.1まで入力できます。' }}</p></el-form-item>
+            <el-form-item :label="copy.experience"><el-input :model-value="experienceText" inputmode="numeric" autocomplete="off" @input="updateExperience" @blur="formatExperience" /><span class="field-unit simple">{{ zh ? '完整年' : '満年' }}</span><p class="field-help">{{ zh ? '仅填写与申请活动直接相关、能够用在职或离职证明说明的完整年数。' : '申請活動に直接関連し、在職・退職証明で立証できる満年数を入力してください。' }}</p></el-form-item>
           </div>
           <el-form-item :label="copy.education">
             <el-radio-group v-model="form.education" class="education-radio-list">
+              <el-radio :value="null"><span class="education-radio-copy"><strong>{{ zh ? '未确认' : '未確認' }}</strong></span></el-radio>
               <el-radio v-for="option in educationOptions" :key="option.value" :value="option.value">
                 <span class="education-radio-copy"><strong>{{ option.label }}</strong><small v-if="option.value === 'professional_degree' || option.value === 'other'">{{ option.desc }}</small></span>
               </el-radio>
@@ -463,7 +566,7 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
                   />
                 </span>
               </template>
-              <el-select v-model="form.researchAchievements"><el-option :label="zh ? '无可确认项目' : '該当なし'" :value="0" /><el-option :label="zh ? '符合1项官方研究成果' : '公式基準に1項目該当'" :value="1" /><el-option :label="zh ? '符合2项及以上' : '2項目以上該当'" :value="2" /></el-select>
+              <el-select v-model="form.researchAchievements"><el-option :label="zh ? '尚未确认' : '未確認'" :value="null" /><el-option :label="zh ? '无可确认项目' : '該当なし'" :value="0" /><el-option :label="zh ? '符合1项官方研究成果' : '公式基準に1項目該当'" :value="1" /><el-option :label="zh ? '符合2项及以上' : '2項目以上該当'" :value="2" /></el-select>
               <a class="official-inline-link" :href="officialSources.research.url" target="_blank" rel="noopener noreferrer">{{ zh ? '查看入管局积分表中的研究成果要求 ↗' : '入管庁ポイント表の研究実績要件を確認 ↗' }}</a>
             </el-form-item>
             <el-form-item v-if="form.activity === 'professional'">
@@ -480,7 +583,7 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
                   />
                 </span>
               </template>
-              <el-select v-model="form.qualificationCount"><el-option :label="zh ? '无' : 'なし'" :value="0" /><el-option :label="zh ? '1项' : '1件'" :value="1" /><el-option :label="zh ? '2项及以上（最多计2项）' : '2件以上（最大2件）'" :value="2" /></el-select>
+              <el-select v-model="form.qualificationCount"><el-option :label="zh ? '尚未确认' : '未確認'" :value="null" /><el-option :label="zh ? '无' : 'なし'" :value="0" /><el-option :label="zh ? '1项' : '1件'" :value="1" /><el-option :label="zh ? '2项及以上（最多计2项）' : '2件以上（最大2件）'" :value="2" /></el-select>
               <a class="official-inline-link" :href="officialSources.japaneseQualification.url" target="_blank" rel="noopener noreferrer">{{ zh ? '查看入管局积分表中的国家资格要求 ↗' : '入管庁ポイント表の国家資格要件を確認 ↗' }}</a>
             </el-form-item>
             <el-form-item v-if="form.activity === 'management'" :label="zh ? '经营管理职位' : '経営・管理上の地位'"><el-select v-model="form.managementPosition"><el-option v-for="option in positionOptions" :key="option.value" :label="zh ? option.zh : option.ja" :value="option.value" /></el-select></el-form-item>
@@ -522,20 +625,73 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
       </div>
 
       <div v-else-if="result" ref="resultSection" class="calculator-result">
-        <div class="result-summary" :class="{ passed: result.reaches70, passed80: result.reaches80 }"><div class="score-ring"><strong>{{ result.totalPoints }}</strong><span>{{ zh ? '预计总分' : '予想ポイント' }}</span></div><div><span class="result-kicker">{{ copy.result }}</span><h2>{{ result.reaches80 ? copy.pass80 : result.reaches70 ? copy.pass : copy.fail }}</h2><p>{{ zh ? '70分' : '70点' }}：{{ result.reaches70 ? '✓' : `— ${result.pointsTo70}${copy.points}` }} · {{ zh ? '80分' : '80点' }}：{{ result.reaches80 ? '✓' : `— ${result.pointsTo80}${copy.points}` }}</p><p v-if="!result.reaches70">{{ copy.missing }} {{ result.pointsTo70 }} {{ copy.points }}</p><el-tag :type="result.preliminaryEligible ? 'success' : 'warning'" round>{{ result.preliminaryEligible ? copy.preliminaryPass : copy.preliminaryReview }}</el-tag></div></div>
+        <div class="result-summary" :class="{ passed: result.reaches70, passed80: result.reaches80 }"><div class="score-ring"><strong>{{ result.totalPoints }}</strong><span>{{ zh ? (unknownFields.length ? '已确认分数' : '预计总分') : (unknownFields.length ? '確認済みポイント' : '予想ポイント') }}</span></div><div><span class="result-kicker">{{ copy.result }}</span><h2>{{ result.reaches80 ? copy.pass80 : result.reaches70 ? copy.pass : unknownFields.length ? (zh ? '已确认分数暂未达到70分' : '確認済みポイントは70点未満') : copy.fail }}</h2><p>{{ zh ? '70分' : '70点' }}：{{ result.reaches70 ? '✓' : `— ${result.pointsTo70}${copy.points}` }} · {{ zh ? '80分' : '80点' }}：{{ result.reaches80 ? '✓' : `— ${result.pointsTo80}${copy.points}` }}</p><p v-if="!result.reaches70">{{ copy.missing }} {{ result.pointsTo70 }} {{ copy.points }}</p><el-tag :type="result.preliminaryEligible ? 'success' : 'warning'" round>{{ result.preliminaryEligible ? copy.preliminaryPass : copy.preliminaryReview }}</el-tag></div></div>
+        <section v-if="unknownFields.length" class="unknown-fields-card"><strong>{{ zh ? '待补充的信息' : '未入力の情報' }}</strong><p>{{ zh ? '这些资料目前按「未输入」处理，没有作为 0 分计入。补齐后分数和门槛判断会重新计算。' : '以下の項目は「未入力」として扱い、0点にはしていません。入力するとポイントと基準判定を再計算します。' }}</p><div><el-tag v-for="field in unknownFields" :key="field" effect="plain">{{ field }}</el-tag></div><h4>{{ zh ? '核对后可能加分（仅供逐项确认，不可直接相加）' : '確認後に加点となる可能性（各項目を個別に確認し、単純合算しないでください）' }}</h4><div class="potential-check-list"><div v-for="item in potentialPointChecks" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.points }}</strong></div></div></section>
+        <section class="live-adjustment-card">
+          <div class="live-adjustment-heading">
+            <div>
+              <span>{{ zh ? '实时模拟' : 'リアルタイム試算' }}</span>
+              <h3>{{ zh ? '调整工资，立即查看 80 分与年度税金' : '年収を調整し、80点と年間税額をすぐに確認' }}</h3>
+            </div>
+            <el-tag :type="result.reaches80 ? 'success' : 'warning'" effect="light" round>
+              {{ result.reaches80 ? (zh ? '已达到 80 分' : '80点に到達') : (zh ? `距 80 分还差 ${result.pointsTo80} 分` : `80点まであと${result.pointsTo80}点`) }}
+            </el-tag>
+          </div>
+          <p class="live-adjustment-intro">{{ zh ? '以下数字修改后会立即重算，不会清空已填的其他资料。税金与工资工具使用同一套估算逻辑。' : '以下の数値は変更するたびに即時再計算され、入力済みの他の情報は消えません。税額は給与ツールと同じ概算ロジックです。' }}</p>
+          <el-form label-position="top" class="live-adjustment-form">
+            <div class="live-adjustment-grid">
+              <el-form-item :label="copy.income" required>
+                <el-input :model-value="incomeText" inputmode="decimal" autocomplete="off" placeholder="400" @input="updateIncome" @blur="formatIncome" />
+                <span class="field-unit simple">{{ zh ? '万日元' : '万円' }}</span>
+                <p class="field-help">{{ zh ? `当前年收积分：+${incomeScore} 分` : `現在の年収ポイント：+${incomeScore}点` }}</p>
+              </el-form-item>
+              <el-form-item :label="copy.experience" required>
+                <el-input :model-value="experienceText" inputmode="numeric" autocomplete="off" @input="updateExperience" @blur="formatExperience" />
+                <span class="field-unit simple">{{ zh ? '完整年' : '満年' }}</span>
+              </el-form-item>
+              <el-form-item v-if="form.activity !== 'management'" :label="copy.research">
+                <el-select v-model="form.researchAchievements"><el-option :label="zh ? '尚未确认' : '未確認'" :value="null" /><el-option :label="zh ? '无可确认项目' : '該当なし'" :value="0" /><el-option :label="zh ? '符合1项' : '1項目'" :value="1" /><el-option :label="zh ? '符合2项及以上' : '2項目以上'" :value="2" /></el-select>
+              </el-form-item>
+              <el-form-item v-if="form.activity === 'professional'" :label="copy.qualification">
+                <el-select v-model="form.qualificationCount"><el-option :label="zh ? '尚未确认' : '未確認'" :value="null" /><el-option :label="zh ? '无' : 'なし'" :value="0" /><el-option :label="zh ? '1项' : '1件'" :value="1" /><el-option :label="zh ? '2项及以上' : '2件以上'" :value="2" /></el-select>
+              </el-form-item>
+              <el-form-item :label="zh ? '参保都道府县' : '加入都道府県'">
+                <el-select v-model="salaryAssumptions.prefecture" filterable><el-option v-for="(_, prefecture) in PREFECTURE_HEALTH_RATES" :key="prefecture" :label="prefecture" :value="prefecture" /></el-select>
+              </el-form-item>
+              <el-form-item :label="zh ? '扶养人数' : '扶養人数'">
+                <el-input-number v-model="salaryAssumptions.dependentCount" :min="0" :max="10" />
+              </el-form-item>
+            </div>
+          </el-form>
+          <div v-if="taxProjection" class="tax-projection-grid">
+            <article class="tax-projection-primary"><span>{{ zh ? '预计年度税金合计' : '概算の年間税額合計' }}</span><strong>{{ money(taxProjection.taxAnnual) }}</strong><small>{{ zh ? '所得税 + 住民税' : '所得税＋住民税' }}</small></article>
+            <div class="tax-projection-breakdown">
+              <div><span>{{ zh ? '所得税（年）' : '所得税（年額）' }}</span><strong>{{ money(taxProjection.incomeTaxAnnual) }}</strong></div>
+              <div><span>{{ zh ? '住民税（年）' : '住民税（年額）' }}</span><strong>{{ money(taxProjection.residentTaxAnnual) }}</strong></div>
+              <div><span>{{ zh ? '个人社会保险（年）' : '本人社会保険（年額）' }}</span><strong>{{ money(taxProjection.insuranceAnnual) }}</strong></div>
+              <div><span>{{ zh ? '预计年到手' : '概算の年間手取り' }}</span><strong>{{ money(taxProjection.takeHomeAnnual) }}</strong></div>
+            </div>
+          </div>
+          <p v-if="taxProjection" class="tax-projection-note">{{ zh ? `按${salaryAssumptions.prefecture}、${salaryAssumptions.dependentCount}名扶养人数概算；住民税假设前一年收入水平相同。${taxProjection.employmentCovered ? '已计入雇用保险。' : '经营管理模式按役员报酬估算，未计雇用保险。'}` : `${salaryAssumptions.prefecture}・扶養${salaryAssumptions.dependentCount}人で概算。住民税は前年も同水準の年収と仮定しています。${taxProjection.employmentCovered ? '雇用保険を含みます。' : '経営・管理は役員報酬として概算し、雇用保険は含みません。'}` }}</p>
+        </section>
+        <section class="income-scenarios-card">
+          <h3>{{ zh ? '不同年收假设下的积分' : '年収の仮定別ポイント' }}</h3>
+          <p>{{ zh ? '仅将年收按情景代入；其他未知资料仍未计分。年龄未知且影响年收档位时，显示分数范围。' : '年収のみを仮定に置き換えています。他の未入力情報は加算せず、年齢が年収区分に影響する場合はポイントの幅を表示します。' }}</p>
+          <div class="scenario-table-wrap"><table class="scenario-table"><thead><tr><th>{{ zh ? '假设年收' : '仮定年収' }}</th><th>{{ zh ? '年收项积分' : '年収ポイント' }}</th><th>{{ zh ? '已确认分 + 年收假设' : '確認済み + 年収仮定' }}</th></tr></thead><tbody><tr v-for="scenario in incomeScenarios" :key="scenario.income"><td>{{ formatIncomeManYen(scenario.income) }}{{ zh ? '万日元' : '万円' }}</td><td>{{ scenario.low === scenario.high ? `+${scenario.low}` : `+${scenario.low}～${scenario.high}` }} {{ copy.points }}</td><td>{{ scenario.totalLow === scenario.totalHigh ? scenario.totalLow : `${scenario.totalLow}～${scenario.totalHigh}` }} {{ copy.points }}</td></tr></tbody></table></div>
+        </section>
         <section class="result-chart-grid">
           <ScoreProgressChart :total="result.totalPoints" :locale="settings.locale" />
           <ScoreBreakdownChart :rows="resultCategoryChart" :locale="settings.locale" />
         </section>
         <section class="applicant-summary">
-          <div><span>{{ copy.name }}</span><strong>{{ form.name }}</strong></div><div><span>{{ copy.birth }}</span><strong>{{ form.birthDate.replace(/-/g, '/') }}</strong></div><div><span>{{ copy.diagnosis }}</span><strong>{{ form.diagnosisDate.replace(/-/g, '/') }}</strong></div><div><span>{{ zh ? '预计年收入' : '予定年収' }}</span><strong>{{ formatIncomeManYen(form.annualIncome) }}{{ zh ? '万日元' : '万円' }}</strong></div><div><span>{{ zh ? '计算年龄 / 年龄积分区间' : '満年齢 / 年齢点区分' }}</span><strong>{{ form.age }} {{ zh ? '岁' : '歳' }} · {{ ageBandLabel(result.ageBand) }}</strong></div>
+          <div><span>{{ copy.name }}</span><strong>{{ form.name || (zh ? '未输入' : '未入力') }}</strong></div><div><span>{{ copy.birth }}</span><strong>{{ form.birthDate ? form.birthDate.replace(/-/g, '/') : (zh ? '未输入' : '未入力') }}</strong></div><div><span>{{ copy.diagnosis }}</span><strong>{{ form.diagnosisDate.replace(/-/g, '/') }}</strong></div><div><span>{{ zh ? '预计年收入' : '予定年収' }}</span><strong>{{ form.annualIncome === null ? (zh ? '未输入' : '未入力') : `${formatIncomeManYen(form.annualIncome)}${zh ? '万日元' : '万円'}` }}</strong></div><div><span>{{ zh ? '计算年龄 / 年龄积分区间' : '満年齢 / 年齢点区分' }}</span><strong>{{ form.age === null ? (zh ? '未输入' : '未入力') : `${form.age} ${zh ? '岁' : '歳'}` }} · {{ ageBandLabel(result.ageBand) }}</strong></div>
         </section>
-        <div v-if="!result.meetsIncomeRequirement || !result.baseActivityConfirmed" class="result-alerts">
-          <div v-if="!result.meetsIncomeRequirement" class="result-alert warning"><el-icon><WarningFilled /></el-icon><span>{{ copy.incomeFail }}</span></div>
+        <div v-if="result.meetsIncomeRequirement !== true || !result.baseActivityConfirmed" class="result-alerts">
+          <div v-if="result.meetsIncomeRequirement === false" class="result-alert warning"><el-icon><WarningFilled /></el-icon><span>{{ copy.incomeFail }}</span></div>
+          <div v-else-if="result.meetsIncomeRequirement === null" class="result-alert warning"><el-icon><WarningFilled /></el-icon><span>{{ zh ? '年收未输入：300万日元最低基准暂无法判断。' : '年収未入力のため、300万円の最低基準は未判定です。' }}</span></div>
           <div v-if="!result.baseActivityConfirmed" class="result-alert warning"><el-icon><WarningFilled /></el-icon><span>{{ copy.baseFail }}</span></div>
         </div>
-        <section class="breakdown-card"><h3>{{ copy.breakdown }}</h3><div class="score-list"><div v-for="item in result.items" :key="item.key"><span><el-icon><Check /></el-icon>{{ itemLabel(item.key) }} <el-tag size="small" :type="item.status === 'included' ? 'success' : 'info'">{{ item.status === 'included' ? (zh ? '已计入' : '算入済み') : item.status === 'excluded' ? (zh ? '因排除关系未计入' : '重複不可のため未加点') : (zh ? '未计入' : '未算入') }}</el-tag></span><strong>{{ item.status === 'included' ? `+${item.points}` : '0' }} {{ copy.points }}</strong></div></div><div class="score-total"><span>{{ zh ? '预计总分' : '予想ポイント' }}</span><strong>{{ result.totalPoints }} {{ copy.points }}</strong></div></section>
-        <section class="suggestion-card"><h3>{{ copy.suggestions }}</h3><div v-for="suggestion in result.suggestions" :key="suggestion.key" class="suggestion-item"><el-tag :type="suggestion.priority === 'high' ? 'warning' : 'info'" effect="light">{{ suggestion.potentialPoints ? `+${suggestion.potentialPoints}` : (zh ? '重要' : '重要') }}</el-tag><p>{{ suggestionText(suggestion.key) }}</p></div></section>
+        <section class="breakdown-card"><h3>{{ copy.breakdown }}</h3><div class="score-list"><div v-for="item in result.items" :key="item.key"><span><el-icon><Check /></el-icon>{{ itemLabel(item.key) }} <el-tag size="small" :type="item.status === 'included' ? 'success' : item.status === 'unknown' ? 'warning' : 'info'">{{ item.status === 'included' ? (zh ? '已计入' : '算入済み') : item.status === 'excluded' ? (zh ? '因排除关系未计入' : '重複不可のため未加点') : item.status === 'unknown' ? (zh ? '未输入' : '未入力') : (zh ? '未计入' : '未算入') }}</el-tag></span><strong>{{ item.status === 'included' ? `+${item.points}` : item.status === 'unknown' ? (zh ? '待确认' : '未確認') : `0 ${copy.points}` }}</strong></div></div><div class="score-total"><span>{{ zh ? (unknownFields.length ? '已确认分数' : '预计总分') : (unknownFields.length ? '確認済みポイント' : '予想ポイント') }}</span><strong>{{ result.totalPoints }} {{ copy.points }}</strong></div></section>
         <section v-if="jSkipResult?.eligible" class="jskip-advisory">
           <div class="result-status success">
             <el-icon><Check /></el-icon>
@@ -543,10 +699,8 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
           </div>
           <p class="jskip-advisory-note">{{ copy.jskipNote }}</p>
           <a class="official-inline-link" :href="officialSources.jSkip.url" target="_blank" rel="noopener noreferrer">{{ copy.jskipOfficialLink }} ↗</a>
-          <p class="jskip-advisory-disclaimer">{{ copy.jskipDisclaimer }}</p>
         </section>
-        <section class="result-disclaimer"><el-icon><InfoFilled /></el-icon><div><h3>{{ zh ? '结果使用说明' : '結果の取り扱い' }}</h3><p>{{ zh ? '本工具根据您填写和选择的内容计算预计积分。正式申请时，各项加分均需提交相应证明材料，并以出入国在留管理厅的最终审查结果为准。' : '本ツールは、入力・選択された内容に基づき予想ポイントを計算するものです。実際の申請時には、各加点項目について所定の証明資料を提出する必要があり、最終的な判断は出入国在留管理庁の審査によります。' }}</p></div></section>
-        <div class="calculator-actions center"><el-button size="large" @click="reset"><el-icon><Refresh /></el-icon>{{ copy.reset }}</el-button><el-button type="primary" size="large" @click="createReport"><el-icon><DocumentChecked /></el-icon>{{ copy.report }}</el-button></div>
+        <div class="calculator-actions center"><el-button size="large" @click="editConditions"><el-icon><Edit /></el-icon>{{ copy.edit }}</el-button><el-button type="primary" size="large" @click="createReport"><el-icon><DocumentChecked /></el-icon>{{ copy.report }}</el-button></div>
       </div>
     </div></section>
 
@@ -554,9 +708,53 @@ function ageBandLabel(band: HighlySkilledResult['ageBand']) {
       <div class="report-page-background"><DiagnosisReportView v-if="report" :key="report.locale" :report="report" /></div>
       <template #footer>
         <div class="report-actions">
+          <el-button type="primary" @click="printReport">{{ zh ? '打印 / 保存为 PDF' : '印刷 / PDFで保存' }}</el-button>
           <el-button type="primary" @click="reportVisible = false">{{ zh ? '关闭' : '閉じる' }}</el-button>
         </div>
       </template>
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.live-adjustment-card { margin-top: 22px; padding: 25px; border: 1px solid var(--color-border); border-radius: 12px; background: #fbfcfc; }
+.unknown-fields-card, .income-scenarios-card { margin-top: 18px; padding: 22px; border: 1px solid var(--color-border); border-radius: 12px; background: #fff; }
+.unknown-fields-card { border-color: #e6c98a; background: #fffaf0; }
+.unknown-fields-card p, .income-scenarios-card > p { margin: 7px 0 14px; color: var(--color-text-secondary); font-size: 13px; line-height: 1.65; }
+.unknown-fields-card > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.unknown-fields-card h4 { margin: 18px 0 6px; font-size: 14px; }
+.potential-check-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-border-light); }
+.potential-check-list div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #fff; font-size: 12px; }
+.potential-check-list strong { white-space: nowrap; }
+.income-scenarios-card h3 { margin: 0; font-size: 18px; }
+.scenario-table-wrap { overflow-x: auto; }
+.scenario-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.scenario-table th, .scenario-table td { padding: 11px 14px; border-bottom: 1px solid var(--color-border-light); text-align: right; white-space: nowrap; }
+.scenario-table th:first-child, .scenario-table td:first-child { text-align: left; }
+.scenario-table th { color: var(--color-text-secondary); font-weight: 600; }
+.live-adjustment-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
+.live-adjustment-heading span { color: var(--color-primary); font-size: 12px; font-weight: 700; }
+.live-adjustment-heading h3 { margin: 5px 0 0; font-size: 20px; }
+.live-adjustment-intro { margin: 10px 0 22px; color: var(--color-text-secondary); font-size: 13px; line-height: 1.7; }
+.live-adjustment-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; }
+.live-adjustment-grid :deep(.el-select), .live-adjustment-grid :deep(.el-input-number) { width: 100%; }
+.tax-projection-grid { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.7fr); gap: 18px; margin-top: 2px; padding-top: 20px; border-top: 1px solid var(--color-border-light); }
+.tax-projection-primary { display: grid; align-content: center; gap: 7px; padding: 20px; border-radius: 10px; background: var(--color-primary-light); }
+.tax-projection-primary span, .tax-projection-primary small { color: var(--color-text-secondary); font-size: 12px; }
+.tax-projection-primary strong { color: var(--color-primary); font-size: clamp(25px, 3vw, 34px); font-variant-numeric: tabular-nums; }
+.tax-projection-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; overflow: hidden; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-border-light); }
+.tax-projection-breakdown div { padding: 14px 16px; background: white; }
+.tax-projection-breakdown span, .tax-projection-breakdown strong { display: block; }
+.tax-projection-breakdown span { color: var(--color-text-secondary); font-size: 12px; }
+.tax-projection-breakdown strong { margin-top: 4px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.tax-projection-note { margin: 12px 0 0; color: var(--color-text-secondary); font-size: 11px; line-height: 1.65; }
+@media (max-width: 780px) {
+  .live-adjustment-grid { grid-template-columns: 1fr 1fr; }
+  .tax-projection-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .live-adjustment-card { padding: 19px; }
+  .live-adjustment-grid, .tax-projection-breakdown { grid-template-columns: 1fr; }
+  .potential-check-list { grid-template-columns: 1fr; }
+}
+</style>

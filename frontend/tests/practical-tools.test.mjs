@@ -132,6 +132,18 @@ test('the salary page takes allowances in yen and lists them as rows of the pays
   assert.match(view, /form\.commutingAllowance > 0/)
 })
 
+test('the employee salary page mirrors the executive annual-burden view and can include the employer share', () => {
+  const view = read('../src/views/SalaryView.vue')
+  const messages = read('../src/data/practicalToolMessages.ts')
+  assert.match(view, /const includeEmployerBurden = ref\(false\)/)
+  assert.match(view, /const totalAnnualCost = computed/)
+  assert.match(view, /r\.employer\.total \* 12/)
+  assert.match(view, /v-model="includeEmployerBurden"/)
+  assert.match(view, /copy\.salary\.employerBurdenLine/)
+  assert.match(messages, /员工工资年度总费用/)
+  assert.match(messages, /給与の年間総費用/)
+})
+
 test('executive compensation derives the monthly salary from a single annual input, with no company profit or corporate tax involved', () => {
   const auto = runtime.calculateExecutiveCompensation(6_000_000, '東京都', true, null)
   assert.equal(auto.annualCompensation, 6_000_000)

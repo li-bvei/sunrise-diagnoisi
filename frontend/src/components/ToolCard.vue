@@ -20,16 +20,6 @@ const icon = computed(() => iconMap[props.tool.icon as IconName])
     <span class="tool-category">{{ settings.text(categoryName(tool.category)) }}</span>
     <h3>{{ settings.text(tool.name) }}</h3>
     <p class="tool-description">{{ settings.text(tool.description) }}</p>
-    <dl class="tool-meta">
-      <div>
-        <dt>{{ settings.dictionary.common.minutes }}</dt>
-        <dd>{{ settings.text(tool.duration) }}</dd>
-      </div>
-      <div>
-        <dt>{{ settings.dictionary.common.result }}</dt>
-        <dd>{{ settings.text(tool.results) }}</dd>
-      </div>
-    </dl>
     <button class="text-link" type="button" @click="emit('select', tool)">
       {{ settings.dictionary.common.useNow }}
       <el-icon><ArrowRight /></el-icon>

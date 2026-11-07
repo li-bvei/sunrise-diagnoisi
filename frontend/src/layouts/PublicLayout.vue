@@ -11,13 +11,13 @@ const settings = useSettingsStore()
 watchEffect(() => {
   const title = route.meta.title as { zh: string; ja: string } | undefined
   const localizedTitle = settings.locale === 'ja-JP' ? title?.ja : title?.zh
-  document.title = localizedTitle ? `${localizedTitle} | SUNRISE` : settings.dictionary.brand
+  document.title = localizedTitle || '工具箱'
 })
 </script>
 
 <template>
   <div class="app-shell">
-    <AppHeader />
+    <AppHeader v-if="route.path !== '/'" />
     <main><RouterView /></main>
     <AppFooter />
   </div>

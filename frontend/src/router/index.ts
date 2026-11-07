@@ -26,13 +26,14 @@ const router = createRouter({
       path: '/',
       component: PublicLayout,
       children: [
-        { path: '', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: { zh: '首页', ja: 'ホーム' } } },
-        { path: 'tools', name: 'tools', component: () => import('@/views/ToolsView.vue'), meta: { title: { zh: '专业诊断', ja: '専門診断' } } },
+        { path: '', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: { zh: '工具箱', ja: 'ツールボックス' } } },
+        { path: 'tools', redirect: (to) => ({ path: '/', query: to.query }) },
         { path: 'tools/highly-skilled', name: 'highly-skilled', component: () => import('@/views/HighlySkilledView.vue'), meta: { title: { zh: '高度人才积分计算', ja: '高度人材ポイント計算' } } },
-        { path: 'tools/permanent-residence', name: 'permanent-residence', component: () => import('@/views/PermanentResidenceView.vue'), meta: { title: { zh: '永住申请条件诊断', ja: '永住許可要件診断' } } },
+        { path: 'tools/permanent-residence', redirect: '/' },
         { path: 'tools/rental-cost', name: 'rental-cost', component: () => import('@/views/RentalCostView.vue'), meta: { title: { zh: '租房初期费用诊断', ja: '賃貸初期費用診断' } } },
+        { path: 'tools/japan-date', name: 'japan-date', component: () => import('@/views/JapanDateView.vue'), meta: { title: { zh: '日本日期与工作日', ja: '日本の日付・営業日計算' } } },
         { path: 'tools/salary', name: 'salary', component: () => import('@/views/SalaryView.vue'), meta: { title: { zh: '工资、社保与到手金额', ja: '給与・社会保険・手取り' } } },
-        { path: 'tools/executive-compensation', name: 'executive-compensation', component: () => import('@/views/ExecutiveCompensationView.vue'), meta: { title: { zh: '役员报酬模拟', ja: '役員報酬シミュレーター' } } },
+        { path: 'tools/executive-compensation', name: 'executive-compensation', component: () => import('@/views/ExecutiveCompensationView.vue'), meta: { title: { zh: '役员报酬', ja: '役員報酬' } } },
         { path: 'tools/payroll', redirect: '/tools/salary' },
         { path: 'tools/standard-remuneration', redirect: '/tools/salary' },
         { path: 'tools/pension', redirect: '/tools' },
@@ -42,7 +43,7 @@ const router = createRouter({
         { path: 'tools/takken-analysis', name: 'takken-analysis', beforeEnter: ensureTakkenData, component: () => import('@/views/TakkenAnalysisView.vue'), meta: { title: { zh: '宅建薄弱分析', ja: '宅建弱点分析' } } },
         { path: 'tools/highly-skilled-pr', redirect: '/tools/highly-skilled' },
         { path: 'tools/j-skip', redirect: '/tools/highly-skilled' },
-        { path: 'guide', name: 'guide', component: () => import('@/views/GuideView.vue'), meta: { title: { zh: '使用说明', ja: 'ご利用案内' } } },
+        { path: 'guide', redirect: '/' },
         { path: 'privacy', name: 'privacy', component: () => import('@/views/LegalView.vue'), props: { page: 'privacy' }, meta: { title: { zh: '隐私政策', ja: 'プライバシーポリシー' } } },
         { path: 'terms', name: 'terms', component: () => import('@/views/LegalView.vue'), props: { page: 'terms' }, meta: { title: { zh: '使用条款', ja: '利用規約' } } },
         { path: 'disclaimer', name: 'disclaimer', component: () => import('@/views/LegalView.vue'), props: { page: 'disclaimer' }, meta: { title: { zh: '免责声明', ja: '免責事項' } } },
@@ -56,7 +57,7 @@ router.afterEach((to) => {
   const locale = localStorage.getItem('sunrise-diagnosis-locale')
   const title = to.meta.title as { zh: string; ja: string } | undefined
   const localizedTitle = locale === 'ja-JP' ? title?.ja : title?.zh
-  document.title = localizedTitle ? `${localizedTitle} | SUNRISE` : 'SUNRISE 专业诊断中心'
+  document.title = localizedTitle || '工具箱'
 })
 
 export default router

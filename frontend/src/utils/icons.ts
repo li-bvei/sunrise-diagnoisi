@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Briefcase,
+  Calendar,
   Coin,
   Compass,
   Connection,
@@ -22,6 +23,7 @@ import {
 export const iconMap = {
   ArrowRight,
   Briefcase,
+  Calendar,
   Coin,
   Compass,
   Connection,

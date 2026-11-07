@@ -204,6 +204,19 @@ test('income scoring and minimum-income checks use the converted yen value', () 
   assert.match(reportViewSource, /万円/)
 })
 
+test('result salary tuning recalculates points and linked annual taxes without clearing prior inputs', () => {
+  assert.match(viewSource, /watch\(form, \(\) => \{/)
+  assert.match(viewSource, /refreshCalculation\(\)/)
+  assert.match(viewSource, /const taxProjection = computed/)
+  assert.match(viewSource, /calculatePayroll\(\{/)
+  assert.match(viewSource, /calculateExecutiveCompensation\(/)
+  assert.match(viewSource, /@input="updateIncome"/)
+  assert.match(viewSource, /@click="editConditions"/)
+  assert.doesNotMatch(viewSource, /@click="reset"/)
+  assert.match(viewSource, /预计年度税金合计/)
+  assert.match(viewSource, /概算の年間税額合計/)
+})
+
 test('report and result breakdowns expose only item, points, and status', () => {
   const input = baseInput({ japaneseUniversity: true, japaneseLevel: 'n2', researchAchievements: 1 })
   const result = runtime.calculateHighlySkilled(input)

@@ -29,9 +29,16 @@ function materialText(material: RentalCostReport['materials'][number]) {
       <small>{{ report.reportId }}<br>{{ formatDate(report.generatedAt) }}</small>
     </header>
 
-    <section v-if="report.monthlyRent || report.moveInDate" class="report-card">
+    <section v-if="report.monthlyRent || report.moveInDate || Object.values(report.property).some((value) => value !== null && value !== '')" class="report-card">
+      <h2>{{ zh ? '房源信息' : '物件情報' }}</h2>
       <div class="report-profile">
+        <div v-if="report.property.name"><span>{{ zh ? '房源名称' : '物件名' }}</span><strong>{{ report.property.name }}</strong></div>
+        <div v-if="report.property.address"><span>{{ zh ? '地址' : '住所' }}</span><strong>{{ report.property.address }}</strong></div>
+        <div v-if="report.property.station"><span>{{ zh ? '最近车站' : '最寄り駅' }}</span><strong>{{ report.property.station }}<template v-if="report.property.walkMinutes !== null"> {{ zh ? '步行' : '徒歩' }}{{ report.property.walkMinutes }}{{ zh ? '分钟' : '分' }}</template></strong></div>
+        <div v-if="report.property.area !== null"><span>{{ zh ? '面积' : '専有面積' }}</span><strong>{{ report.property.area }}㎡</strong></div>
+        <div v-if="report.property.buildingAge !== null"><span>{{ zh ? '建筑年限' : '築年数' }}</span><strong>{{ report.property.buildingAge }}{{ zh ? '年' : '年' }}</strong></div>
         <div v-if="report.monthlyRent"><span>{{ zh ? '每月房租' : '月額賃料' }}</span><strong>{{ formatYen(report.monthlyRent) }}</strong></div>
+        <div v-if="report.property.managementFee !== null"><span>{{ zh ? '月管理费/共益费' : '月額管理費・共益費' }}</span><strong>{{ formatYen(report.property.managementFee) }}</strong></div>
         <div v-if="report.moveInDate"><span>{{ zh ? '入住日期' : '入居日' }}</span><strong>{{ formatDate(report.moveInDate) }}</strong></div>
       </div>
     </section>

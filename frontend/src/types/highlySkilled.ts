@@ -1,6 +1,6 @@
 export type HighlySkilledActivity = 'academic' | 'professional' | 'management'
 export type EducationLevel = 'bachelor' | 'master' | 'doctorate' | 'professional_degree' | 'other'
-export type JapaneseLevel = 'none' | 'n2' | 'n1'
+export type JapaneseLevel = 'none' | 'n2' | 'n1' | null
 export type ManagementPosition = 'none' | 'director' | 'representative'
 export interface UniversitySelection {
   countryCode: string
@@ -14,13 +14,13 @@ export interface HighlySkilledInput {
   birthDate: string
   diagnosisDate: string
   activity: HighlySkilledActivity
-  age: number
-  annualIncome: number
-  education: EducationLevel
-  experienceYears: number
-  researchAchievements: 0 | 1 | 2
+  age: number | null
+  annualIncome: number | null
+  education: EducationLevel | null
+  experienceYears: number | null
+  researchAchievements: 0 | 1 | 2 | null
   japaneseLevel: JapaneseLevel
-  qualificationCount: 0 | 1 | 2
+  qualificationCount: 0 | 1 | 2 | null
   managementPosition: ManagementPosition
   university: UniversitySelection
   multipleDegrees: boolean
@@ -47,7 +47,7 @@ export interface ScoreItem {
   key: string
   category: ScoreCategory
   points: number
-  status: 'included' | 'not-included' | 'not-applicable' | 'excluded'
+  status: 'included' | 'not-included' | 'not-applicable' | 'excluded' | 'unknown'
   sourceUrl?: string
   evidenceKey?: string
   reasonKey?: string
@@ -66,10 +66,10 @@ export interface HighlySkilledResult {
   reaches80: boolean
   pointsTo70: number
   pointsTo80: number
-  meetsIncomeRequirement: boolean
+  meetsIncomeRequirement: boolean | null
   baseActivityConfirmed: boolean
   preliminaryEligible: boolean
-  ageBand: 'under30' | '30to34' | '35to39' | '40plus'
+  ageBand: 'under30' | '30to34' | '35to39' | '40plus' | null
   suggestions: ImprovementSuggestion[]
   rulesVersion: string
 }
@@ -90,20 +90,20 @@ export interface DiagnosisReport {
     name: string
     maskedPhone: string
     birthDate: string
-    age: number
+    age: number | null
   }
   diagnosis: {
     diagnosisDate: string
-    calculatedAge: number
+    calculatedAge: number | null
     activity: HighlySkilledActivity
-    education: EducationLevel
+    education: EducationLevel | null
     totalPoints: number
     reaches70: boolean
     reaches80: boolean
     pointsTo70: number
     pointsTo80: number
-    minimumIncomeSatisfied: boolean
-    status: 'reaches80' | 'reaches70' | 'below70'
+    minimumIncomeSatisfied: boolean | null
+    status: 'reaches80' | 'reaches70' | 'below70' | 'needs-information'
     university: UniversitySelection
     universityVerification: {
       status: 'matched' | 'not-found' | 'not-selected'

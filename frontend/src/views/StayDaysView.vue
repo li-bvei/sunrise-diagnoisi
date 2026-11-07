@@ -12,9 +12,11 @@ import { loadTravelRecords, saveTravelRecords } from '@/utils/stayStorage'
 const settings = useSettingsStore()
 const copy = computed(() => practicalToolMessages[settings.locale])
 const records = ref(loadTravelRecords())
-const dialogOpen = ref(false)
+const addingRecord = ref(false)
 const editingId = ref<string | null>(null)
+const showExtra = ref(false)
 const sortOrder = ref<'desc' | 'asc'>('desc')
+
 function localToday(): string {
   const now = new Date()
   const y = now.getFullYear()
@@ -22,6 +24,7 @@ function localToday(): string {
   const d = `${now.getDate()}`.padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
 const today = localToday()
 const draft = reactive<TravelRecordDraft>({ exitDate: today, entryDate: today, exitPort: '', entryPort: '', note: '' })
 const period = reactive({ startDate: `${new Date().getFullYear()}-01-01`, endDate: today })
@@ -38,10 +41,24 @@ const sortedRecords = computed(() => [...recordsWithIntervals.value].sort((a, b)
 
 function resetDraft() {
   Object.assign(draft, { exitDate: today, entryDate: today, exitPort: '', entryPort: '', note: '' })
-  editingId.value = null
 }
-function openAdd() { resetDraft(); dialogOpen.value = true }
-function openEdit(record: TravelRecord) { editingId.value = record.id; Object.assign(draft, record); dialogOpen.value = true }
+function openAdd() {
+  resetDraft()
+  editingId.value = null
+  showExtra.value = false
+  addingRecord.value = true
+}
+function openEdit(record: TravelRecord) {
+  addingRecord.value = false
+  editingId.value = record.id
+  showExtra.value = Boolean(record.exitPort || record.entryPort || record.note)
+  Object.assign(draft, record)
+}
+function cancelEditor() {
+  addingRecord.value = false
+  editingId.value = null
+  showExtra.value = false
+}
 function persist() {
   if (!saveTravelRecords(records.value)) ElMessage.warning(copy.value.common.saveFailed)
 }
@@ -53,14 +70,14 @@ function saveRecord() {
   } else {
     records.value.push({ id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`, ...draft })
   }
-  persist(); dialogOpen.value = false; ElMessage.success(copy.value.stay.saved)
+  persist()
+  cancelEditor()
+  ElMessage.success(copy.value.stay.saved)
 }
 async function removeRecord(id: string) {
   try {
     await ElMessageBox.confirm(copy.value.stay.removeConfirm, copy.value.stay.removeConfirmTitle, {
-      type: 'warning',
-      confirmButtonText: copy.value.stay.remove,
-      cancelButtonText: copy.value.common.cancel,
+      type: 'warning', confirmButtonText: copy.value.stay.remove, cancelButtonText: copy.value.common.cancel,
     })
   } catch {
     return
@@ -86,8 +103,14 @@ function exportCsv() {
     <PracticalToolHero :eyebrow="copy.stay.eyebrow" :title="copy.stay.title" :description="copy.stay.description" />
     <section class="section practical-section"><div class="container practical-stack">
       <el-alert type="info" :closable="false" show-icon :title="copy.stay.localOnly" />
-      <div class="stay-toolbar"><h2>{{ copy.stay.summary }}</h2><div><el-button :icon="Download" :disabled="!records.length" @click="exportCsv">{{ copy.stay.export }}</el-button><el-button type="primary" :icon="Plus" @click="openAdd">{{ copy.stay.add }}</el-button></div></div>
 
+      <div class="stay-toolbar">
+        <h2>{{ copy.stay.summary }}</h2>
+        <div>
+          <el-button :icon="Download" :disabled="!records.length" @click="exportCsv">{{ copy.stay.export }}</el-button>
+          <el-button type="primary" :icon="Plus" @click="openAdd">{{ copy.stay.add }}</el-button>
+        </div>
+      </div>
       <div v-if="summaries.length" class="year-summary-grid">
         <article v-for="summary in summaries" :key="summary.year" class="year-summary-card">
           <strong>{{ summary.year }}</strong>
@@ -107,26 +130,46 @@ function exportCsv() {
         </div>
       </el-card>
 
+      <div v-if="addingRecord" class="travel-record-editor">
+        <h3>{{ copy.stay.add }}</h3>
+        <div class="record-editor-dates">
+          <el-form-item :label="copy.stay.exitDate"><el-date-picker v-model="draft.exitDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+          <el-form-item :label="copy.stay.entryDate"><el-date-picker v-model="draft.entryDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+        </div>
+        <button class="record-extra-toggle" type="button" @click="showExtra = !showExtra">{{ showExtra ? copy.stay.hideDetails : copy.stay.optionalDetails }}</button>
+        <div v-if="showExtra" class="record-editor-extra">
+          <el-form-item :label="copy.stay.exitPort"><el-input v-model="draft.exitPort" /></el-form-item>
+          <el-form-item :label="copy.stay.entryPort"><el-input v-model="draft.entryPort" /></el-form-item>
+          <el-form-item :label="copy.stay.note" class="record-note-field"><el-input v-model="draft.note" /></el-form-item>
+        </div>
+        <div class="record-editor-actions"><el-button @click="cancelEditor">{{ copy.common.cancel }}</el-button><el-button type="primary" @click="saveRecord">{{ copy.common.save }}</el-button></div>
+      </div>
+
       <div class="stay-toolbar"><h2>{{ copy.stay.records }}</h2><el-select v-model="sortOrder" class="stay-sort"><el-option :label="copy.stay.sortNewest" value="desc" /><el-option :label="copy.stay.sortOldest" value="asc" /></el-select></div>
       <div class="travel-record-list">
         <article v-for="record in sortedRecords" :key="record.id" class="travel-record-card">
-          <div class="record-route"><strong>{{ record.exitDate }} → {{ record.entryDate }}</strong><el-tag>{{ travelDays(record.exitDate, record.entryDate) }} {{ copy.stay.days }}</el-tag></div>
-          <p v-if="record.exitPort || record.entryPort">{{ record.exitPort || '—' }} → {{ record.entryPort || '—' }}</p>
-          <p v-if="record.inJapanInterval !== null">{{ copy.stay.inJapanInterval }}：{{ record.inJapanInterval }}</p>
-          <p v-if="record.note">{{ record.note }}</p>
-          <div class="record-actions"><el-button text :icon="Edit" @click="openEdit(record)">{{ copy.stay.edit }}</el-button><el-button text type="danger" :icon="Delete" @click="removeRecord(record.id)">{{ copy.stay.remove }}</el-button></div>
+          <template v-if="editingId === record.id">
+            <div class="record-editor-dates">
+              <el-form-item :label="copy.stay.exitDate"><el-date-picker v-model="draft.exitDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+              <el-form-item :label="copy.stay.entryDate"><el-date-picker v-model="draft.entryDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+            </div>
+            <button class="record-extra-toggle" type="button" @click="showExtra = !showExtra">{{ showExtra ? copy.stay.hideDetails : copy.stay.optionalDetails }}</button>
+            <div v-if="showExtra" class="record-editor-extra">
+              <el-form-item :label="copy.stay.exitPort"><el-input v-model="draft.exitPort" /></el-form-item>
+              <el-form-item :label="copy.stay.entryPort"><el-input v-model="draft.entryPort" /></el-form-item>
+              <el-form-item :label="copy.stay.note" class="record-note-field"><el-input v-model="draft.note" /></el-form-item>
+            </div>
+            <div class="record-editor-actions"><el-button @click="cancelEditor">{{ copy.common.cancel }}</el-button><el-button type="primary" @click="saveRecord">{{ copy.common.save }}</el-button></div>
+          </template>
+          <template v-else>
+            <div class="record-route"><strong>{{ record.exitDate }} → {{ record.entryDate }}</strong><el-tag>{{ travelDays(record.exitDate, record.entryDate) }} {{ copy.stay.days }}</el-tag></div>
+            <p v-if="record.exitPort || record.entryPort">{{ record.exitPort || '—' }} → {{ record.entryPort || '—' }}</p>
+            <p v-if="record.inJapanInterval !== null">{{ copy.stay.inJapanInterval }}：{{ record.inJapanInterval }}</p>
+            <p v-if="record.note">{{ record.note }}</p>
+            <div class="record-actions"><el-button text :icon="Edit" @click="openEdit(record)">{{ copy.stay.edit }}</el-button><el-button text type="danger" :icon="Delete" @click="removeRecord(record.id)">{{ copy.stay.remove }}</el-button></div>
+          </template>
         </article>
       </div>
-
-      <el-dialog v-model="dialogOpen" :title="editingId ? copy.stay.edit : copy.stay.add" width="min(520px, calc(100vw - 28px))">
-        <el-form label-position="top"><div class="practical-form-grid">
-          <el-form-item :label="copy.stay.exitDate"><el-date-picker v-model="draft.exitDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-          <el-form-item :label="copy.stay.entryDate"><el-date-picker v-model="draft.entryDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-          <el-form-item :label="copy.stay.exitPort"><el-input v-model="draft.exitPort" /></el-form-item>
-          <el-form-item :label="copy.stay.entryPort"><el-input v-model="draft.entryPort" /></el-form-item>
-        </div><el-form-item :label="copy.stay.note"><el-input v-model="draft.note" type="textarea" :rows="3" /></el-form-item></el-form>
-        <template #footer><el-button @click="dialogOpen = false">{{ copy.common.cancel }}</el-button><el-button type="primary" @click="saveRecord">{{ copy.common.save }}</el-button></template>
-      </el-dialog>
     </div></section>
   </div>
 </template>

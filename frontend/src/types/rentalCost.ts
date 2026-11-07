@@ -69,6 +69,15 @@ export interface RentalCostReport {
   locale: 'zh-CN' | 'ja-JP'
   monthlyRent: number | null
   moveInDate: string | null
+  property: {
+    name: string
+    address: string
+    station: string
+    walkMinutes: number | null
+    area: number | null
+    buildingAge: number | null
+    managementFee: number | null
+  }
   items: RentalCostReportLineItem[]
   total: number
   materials: RentalCostReportMaterial[]
