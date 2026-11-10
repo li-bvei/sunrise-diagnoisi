@@ -31,6 +31,7 @@ const router = createRouter({
         { path: 'tools/highly-skilled', name: 'highly-skilled', component: () => import('@/views/HighlySkilledView.vue'), meta: { title: { zh: '高度人才积分计算', ja: '高度人材ポイント計算' } } },
         { path: 'tools/permanent-residence', redirect: '/' },
         { path: 'tools/rental-cost', name: 'rental-cost', component: () => import('@/views/RentalCostView.vue'), meta: { title: { zh: '租房初期费用诊断', ja: '賃貸初期費用診断' } } },
+        { path: 'tools/purchase-yield', name: 'purchase-yield', component: () => import('@/views/PurchaseYieldView.vue'), meta: { title: { zh: '买房费用与回报率', ja: '購入費用・利回り計算' } } },
         { path: 'tools/japan-date', name: 'japan-date', component: () => import('@/views/JapanDateView.vue'), meta: { title: { zh: '日本日期与工作日', ja: '日本の日付・営業日計算' } } },
         { path: 'tools/salary', name: 'salary', component: () => import('@/views/SalaryView.vue'), meta: { title: { zh: '工资、社保与到手金额', ja: '給与・社会保険・手取り' } } },
         { path: 'tools/executive-compensation', name: 'executive-compensation', component: () => import('@/views/ExecutiveCompensationView.vue'), meta: { title: { zh: '役员报酬', ja: '役員報酬' } } },

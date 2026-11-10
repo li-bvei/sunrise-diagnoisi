@@ -137,7 +137,17 @@ docker compose logs -f --tail=100
 
 种子文件由 `cd frontend && npm run takken:seed` 从 `frontend/src/data/takken-*.json` 生成；想让它反映数据库最新内容，先 `npm run takken:export` 再 `npm run takken:seed`。
 
-本地开发前端时，`vite` 会把 `/api` 代理到 `http://127.0.0.1:3001`（可用 `TAKKEN_API_PROXY` 改成线上地址，只读）。
+本地开发前端时，`vite` 会把 `/api` 代理到 `http://127.0.0.1:3001`（可用 `TAKKEN_API_PROXY` 指定其他 API 地址）。
+
+## 房产方案数据库
+
+`/tools/purchase-yield` 的历史方案通过 `/api/purchase-yield/scenarios` 保存。每条记录包含全部表单输入、计算明细、规则版本与保存时间；修改后约 1.2 秒自动写入。正式环境使用上面的宝塔 MySQL，API 启动时自动创建 `purchase_yield_scenarios` 表。
+
+`/tools/rental-cost` 使用相同的保存方式，输入后约 0.9 秒自动写入 `/api/rental-cost/scenarios`。每条记录保存房源、全部费用输入、自定义费用、材料、当时的计算结果和规则版本；正式环境自动创建 `rental_cost_scenarios` 表。页面可载入、删除历史方案，也可打印右侧费用清单或保存为 PDF。
+
+本地没有 MySQL 配置时，可在 `server/` 运行 `node index.mjs`，两种方案分别保存到被 Git 忽略的 `server/data/purchase-yield.sqlite` 与 `server/data/rental-cost.sqlite`。前端开发服务器仍通过 `/api` 代理访问它。
+
+目前网站没有用户登录。浏览器只保存随机生成的私有访问密钥和当前方案 ID，方案明细保存在数据库中；不同浏览器不会自动共用历史记录。清除浏览器网站数据后，旧记录无法再通过原访问密钥找回。
 
 ## 宝塔 / 宿主机 Nginx 反向代理
 
@@ -314,18 +324,18 @@ Nginx 使用 `try_files $uri $uri/ /index.html` 支持 Vue Router history 模式
 
 ## 租房初期费用清单规则
 
-本工具不做公式推算，而是让工作人员按房源实际收费项目逐项勾选、直接填写金额，生成一份可交给客户查看的费用与材料清单（类似高度人才积分诊断的报告导出）。类型定义在 `frontend/src/types/rentalCost.ts`，标签/说明文案与报告生成逻辑在 `frontend/src/utils/rentalCostCalculator.ts`，报告展示组件为 `frontend/src/components/rental-cost/RentalCostReportView.vue`。规则版本为 `RENTAL_COST_RULES_VERSION`（当前 `2026-08`），仅用于标记文案/项目清单的版本，不涉及计算公式。
+本工具按工作人员输入的实际费用求和，左侧输入、右侧实时显示费用清单及客户文本。类型定义在 `frontend/src/types/rentalCost.ts`，标签与计算逻辑在 `frontend/src/utils/rentalCostCalculator.ts`，页面在 `frontend/src/views/RentalCostView.vue`。规则版本为 `RENTAL_COST_RULES_VERSION`（当前 `2026-08`），仅用于标记项目清单的版本，不涉及计算公式。
 
-- 费用项目固定 13 项预设（敷金、礼金、保证金、仲介手续费、保证公司利用料、火灾保险、钥匙更换费、当月/次月房租、当月/次月管理费、清扫费、契约事务手续费），每项自带一句固定中日双语说明；未勾选的项目不出现在报告里，也不计入合计
+- 费用项目固定 13 项预设（敷金、礼金、保证金、仲介手续费、保证公司利用料、火灾保险、钥匙更换费、当月/次月房租、当月/次月管理费、清扫费、契约事务手续费）；未填写的项目不出现在清单里，也不计入合计
 - 每个费用项目的金额均由用户直接输入，不做房租倍数或百分比推算；唯一例外是“当月房租”——如果填写了每月房租和入住日期，会按当月实际天数（`daysInMonth`）算出一个日割参考金额显示在旁边，用户点击“填入参考值”才会带入输入框，不点击则保持空白，且填入后仍可手动改成实际金额
 - 支持在清单外自由添加自定义费用项目（项目名称 + 金额）
 - 材料清单同样是固定 8 项预设（在留卡/护照、住民票、收入证明、印章、印鉴登录证明书、证件照、紧急联系人/保证人信息、银行账户信息）+ 自定义追加，只勾选、不需要金额
-- 报告不包含免责声明区块（按业务要求移除）；报告顶部只在填写了房租或入住日期时才显示对应信息
+- 右侧清单实时显示已填写的金额与材料；客户文本可直接复制，清单可打印或保存为 PDF
 
 维护本清单时：
 
 1. 新增/调整预设费用或材料项目，需要同时改 `RENTAL_COST_ITEM_KEYS`/`RENTAL_MATERIAL_KEYS`（类型定义）和对应的双语标签/说明文案（`rentalCostCalculator.ts` 里的 `ITEM_TEXT`/`MATERIAL_TEXT`）；
-2. 改动会影响已生成的历史 PDF 的字段口径，调整前先确认是否需要同步更新 `RENTAL_COST_RULES_VERSION`；
+2. 改动会影响数据库中的历史计算快照与后来生成的 PDF，调整前先确认是否需要同步更新 `RENTAL_COST_RULES_VERSION`；
 3. 日割参考值只是建议值，不得改成强制计算或自动覆盖用户已填的金额；
 4. 同步更新中日文说明与本节。
 

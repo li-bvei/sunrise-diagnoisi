@@ -2,7 +2,7 @@ import type { CategoryInfo, DiagnosisTool } from '@/types/content'
 
 const categoryMeta: Omit<CategoryInfo, 'count'>[] = [
   { id: 'residence', icon: 'Passport', name: { 'zh-CN': '在留资格', 'ja-JP': '在留資格' }, description: { 'zh-CN': '计算高度人才积分。', 'ja-JP': '高度人材ポイントを計算します。' } },
-  { id: 'property', icon: 'House', name: { 'zh-CN': '不动产', 'ja-JP': '不動産' }, description: { 'zh-CN': '整理在日租房的初期费用与材料。', 'ja-JP': '日本での賃貸契約に必要な初期費用と書類を整理します。' } },
+  { id: 'property', icon: 'House', name: { 'zh-CN': '不动产', 'ja-JP': '不動産' }, description: { 'zh-CN': '整理租房初期费用，估算买房投资回报。', 'ja-JP': '賃貸初期費用の整理と、購入時の投資利回りを試算します。' } },
   { id: 'income', icon: 'Coin', name: { 'zh-CN': '收入与经营', 'ja-JP': '収入・経営' }, description: { 'zh-CN': '估算工资到手、社会保险与役员报酬方案。', 'ja-JP': '給与手取り、社会保険、役員報酬プランを試算します。' } },
   { id: 'records', icon: 'Suitcase', name: { 'zh-CN': '在日记录', 'ja-JP': '在日記録' }, description: { 'zh-CN': '整理出入境记录并汇总在日天数。', 'ja-JP': '出入国記録を整理し、在日日数を集計します。' } },
   { id: 'exam', icon: 'Reading', name: { 'zh-CN': '资格考试', 'ja-JP': '資格試験' }, description: { 'zh-CN': '日本资格考试的刷题与学习工具。', 'ja-JP': '日本の資格試験対策用の演習・学習ツールです。' } },
@@ -16,9 +16,14 @@ export const tools: DiagnosisTool[] = [
     duration: { 'zh-CN': '约 5 分钟', 'ja-JP': '約5分' }, results: { 'zh-CN': '资格初判、总积分、逐项明细', 'ja-JP': '資格の初期判断、合計点、項目別内訳' }, status: 'available', route: '/tools/highly-skilled', featured: true,
   },
   {
-    id: 'rental', category: 'property', icon: 'Key', name: { 'zh-CN': '租房初期费用诊断', 'ja-JP': '賃貸初期費用診断' },
-    description: { 'zh-CN': '计算初期费用，整理房源条件并生成可复制给客户的说明。', 'ja-JP': '初期費用を計算し、物件情報とお客様向けの案内文を作成します。' },
+    id: 'rental', category: 'property', icon: 'Key', name: { 'zh-CN': '租房初期费用', 'ja-JP': '賃貸初期費用' },
+    description: { 'zh-CN': '输入实际费用，实时汇总并生成可复制给客户的说明。', 'ja-JP': '実際の費用を入力し、合計とお客様向けの案内文を作成します。' },
     duration: { 'zh-CN': '随时使用', 'ja-JP': 'いつでも利用' }, results: { 'zh-CN': '初期费用合计、房源概要、客户说明文本', 'ja-JP': '初期費用合計、物件概要、お客様向け案内文' }, status: 'available', route: '/tools/rental-cost', featured: true,
+  },
+  {
+    id: 'purchase-yield', category: 'property', icon: 'OfficeBuilding', name: { 'zh-CN': '买房费用与回报率', 'ja-JP': '購入費用・利回り計算' },
+    description: { 'zh-CN': '估算购入成本、年度收支和回报率，保存物件历史与报告图片。', 'ja-JP': '購入費用、年間収支、利回りを試算し、物件履歴とレポート画像を保存します。' },
+    duration: { 'zh-CN': '随时使用', 'ja-JP': 'いつでも利用' }, results: { 'zh-CN': '初期投入、年度收支、回报率、报告图片', 'ja-JP': '初期投資、年間収支、利回り、レポート画像' }, status: 'available', route: '/tools/purchase-yield',
   },
   {
     id: 'japan-date', category: 'daily', icon: 'Calendar', name: { 'zh-CN': '日本日期与工作日', 'ja-JP': '日本の日付・営業日計算' },

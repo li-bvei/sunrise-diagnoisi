@@ -1,4 +1,4 @@
-export type ToolId = 'highly-skilled' | 'permanent-residence' | 'rental'
+export type ToolId = 'highly-skilled' | 'permanent-residence' | 'rental' | 'purchase-yield'
 export type AnalyticsEvent =
   | { type: 'tool_view'; toolId: ToolId }
   | { type: 'tool_complete'; toolId: ToolId }

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Small read/write API for the takken question bank and topic reference (MySQL).",
+  "description": "API for the takken bank, purchase-yield scenarios and rental-cost scenarios (MySQL; local SQLite for scenarios).",
   "scripts": {
     "start": "node index.mjs"
   },

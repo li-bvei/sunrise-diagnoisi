@@ -1,3 +1,5 @@
+import type { PropertyProfile } from '@/types/property'
+
 export type RentalCostItemKey =
   | 'deposit'
   | 'keyMoney'
@@ -69,16 +71,26 @@ export interface RentalCostReport {
   locale: 'zh-CN' | 'ja-JP'
   monthlyRent: number | null
   moveInDate: string | null
-  property: {
-    name: string
-    address: string
-    station: string
-    walkMinutes: number | null
-    area: number | null
-    buildingAge: number | null
-    managementFee: number | null
-  }
+  property: PropertyProfile
   items: RentalCostReportLineItem[]
   total: number
   materials: RentalCostReportMaterial[]
+}
+
+export interface RentalCostInput {
+  monthlyRent: number | null
+  moveInDate: string | null
+  property: PropertyProfile
+  costs: Record<RentalCostItemKey, number | null>
+  customCosts: { id: string; label: string; amount: number | null }[]
+  materials: RentalMaterialKey[]
+  customMaterials: { id: string; label: string }[]
+}
+
+export interface RentalCostScenario {
+  id: string
+  input: RentalCostInput
+  calculation: RentalCostReport
+  ruleVersion: string
+  savedAt: string
 }

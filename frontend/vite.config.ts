@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     base: resolveBasePath(env.VITE_BASE_PATH, mode === 'production'),
     plugins: [vue()],
     server: {
-      // Local dev: the takken API (server/) runs on 3001 by default; override with TAKKEN_API_PROXY.
+      // Local dev: the database API (server/) runs on 3001 by default; override with TAKKEN_API_PROXY.
       proxy: { '/api': env.TAKKEN_API_PROXY || 'http://127.0.0.1:3001' },
     },
     resolve: {

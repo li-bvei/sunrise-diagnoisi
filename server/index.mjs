@@ -1,6 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createPool, ensureSchema, listAll, ping, upsertMany } from './db.mjs'
+import { createPurchaseStore, ownerHash, validateScenario } from './purchase-scenarios.mjs'
+import { createRentalStore, validateRentalScenario } from './rental-scenarios.mjs'
 import { validateBatch, validateQuestion, validateTopic } from './validate.mjs'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -13,7 +15,9 @@ const KINDS = {
   topics: { validate: validateTopic },
 }
 
-const pool = createPool()
+const pool = process.env.DB_NAME && process.env.DB_USER ? createPool() : null
+let purchaseStore
+let rentalStore
 
 function send(res, status, body, headers = {}) {
   const payload = typeof body === 'string' ? body : JSON.stringify(body)
@@ -90,12 +94,37 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost')
   try {
     if (url.pathname === '/api/health') {
-      await ping(pool)
+      await purchaseStore.ping()
+      await rentalStore.ping()
+      if (pool) await ping(pool)
       return send(res, 200, { ok: true })
+    }
+
+    const scenarioMatch = url.pathname.match(/^\/api\/(purchase-yield|rental-cost)\/scenarios(?:\/([a-zA-Z0-9-]{12,64}))?$/)
+    if (scenarioMatch) {
+      const owner = ownerHash(req.headers['x-scenario-owner'])
+      if (!owner) return send(res, 401, { error: 'Missing scenario owner key.' })
+      const rental = scenarioMatch[1] === 'rental-cost'
+      const store = rental ? rentalStore : purchaseStore
+      const id = scenarioMatch[2]
+      if (!id && req.method === 'GET') return send(res, 200, await store.list(owner), { 'Cache-Control': 'no-store' })
+      if (!id && req.method === 'PUT') {
+        let scenario
+        try { scenario = JSON.parse(await readBody(req)) }
+        catch (error) { return send(res, error.status || 400, { error: error.message || 'Invalid JSON.' }) }
+        if (!(rental ? validateRentalScenario(scenario) : validateScenario(scenario))) return send(res, 400, { error: 'Invalid scenario details.' })
+        return send(res, 200, await store.save(owner, scenario), { 'Cache-Control': 'no-store' })
+      }
+      if (id && req.method === 'DELETE') {
+        await store.remove(owner, id)
+        return send(res, 200, { ok: true }, { 'Cache-Control': 'no-store' })
+      }
+      return send(res, 405, { error: 'Method not allowed' }, { Allow: id ? 'DELETE' : 'GET, PUT' })
     }
 
     const match = url.pathname.match(/^\/api\/takken\/(questions|topics)$/)
     if (!match) return send(res, 404, { error: 'Not found' })
+    if (!pool) return send(res, 503, { error: 'Takken database is not configured.' })
     const kind = match[1]
 
     if (req.method === 'GET') return await handleRead(req, res, kind)
@@ -110,9 +139,17 @@ const server = createServer(async (req, res) => {
 // The pool connects lazily, so create the tables up front and retry: on a cold `docker compose up`
 // the database may need a few seconds, and crashing in a loop would just spam restarts.
 async function start() {
+  if (!pool) {
+    purchaseStore = await createPurchaseStore(null)
+    rentalStore = await createRentalStore(null)
+    server.listen(PORT, HOST, () => console.log(`scenario API listening on ${HOST}:${PORT} (SQLite)`))
+    return
+  }
   for (let attempt = 1; ; attempt += 1) {
     try {
       await ensureSchema(pool)
+      purchaseStore = await createPurchaseStore(pool)
+      rentalStore = await createRentalStore(pool)
       break
     } catch (error) {
       if (attempt >= 10) throw error
